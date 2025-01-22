@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import numpy as np
 import torch
@@ -27,9 +28,9 @@ def prepare_ft_model(chkpt_dir, num_classes):
     return model
 
 
-def prepare_data():
+def prepare_image(img_path):
     # load an image
-    img = Image.open(args.data_path)
+    img = Image.open(img_path)
     img = img.resize((224, 224))
     img = np.array(img) / 255.
 
@@ -48,9 +49,7 @@ def prepare_data():
     return x
 
 
-def run_classification(model):
-    x = prepare_data()
-
+def run_classification(x, model):
     # model inference
     with torch.no_grad():
         output = model(x)
@@ -58,24 +57,24 @@ def run_classification(model):
     output = nn.Softmax(dim=1)(output)
     output = output.squeeze(0).cpu().detach().numpy()
 
-    print(f"Results: {output}")
+    print(f"Results for {x}: {output}")
 
     # visualization
+    """
     categories = ["Atrophy", "Normal"]
     colors = ["red", "green"]
     prob_result = draw_result(output, categories, colors)
 
     Image.fromarray(prob_result).save('classification.png')
+    """
 
 
 def draw_result(probabilities, categories, colors):
     # Creating the bar plot
     fig = plt.figure(figsize=(12, 10))
     plt.barh(categories, probabilities, color=colors)
-    if len(categories) == 39:
-        fontsize = 8
-    else:
-        fontsize = 12
+    fontsize = 12
+
     plt.xticks(fontsize=fontsize)
     plt.yticks(fontsize=fontsize)
     plt.xlabel('Probability', fontsize=fontsize)
@@ -87,10 +86,12 @@ def draw_result(probabilities, categories, colors):
     fig.canvas.draw()
     data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
     data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+
     return data
 
 
 if __name__ == '__main__':
+    # parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str)
     parser.add_argument("--num_classes", type=int, default=2)
@@ -99,4 +100,14 @@ if __name__ == '__main__':
 
     # chose fine-tuned model from 'checkpoint'
     model = prepare_ft_model(chkpt_dir=args.resume, num_classes=args.num_classes)
-    run_classification(model)
+
+    # get all images
+    # supports single files or folders
+    data_path = args.data_path
+    images = [data_path] if os.path.isfile(data_path) else \
+        [i for i in os.listdir(data_path) if os.path.isfile(i)]
+
+    # run classification for each image
+    for img in images:
+        x = prepare_image(img)
+        run_classification(x=x, model=model)
