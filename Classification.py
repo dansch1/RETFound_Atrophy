@@ -1,5 +1,6 @@
 import argparse
 import os
+import pathlib
 
 import numpy as np
 import torch
@@ -49,7 +50,9 @@ def prepare_image(img_path):
     return x
 
 
-def run_classification(x, model):
+def run_classification(img, model):
+    x = prepare_image(img)
+
     # model inference
     with torch.no_grad():
         output = model(x)
@@ -57,7 +60,7 @@ def run_classification(x, model):
     output = nn.Softmax(dim=1)(output)
     output = output.squeeze(0).cpu().detach().numpy()
 
-    print(f"Results for {x}: {output}")
+    print(f"Results for {img}: {output}")
 
     # visualization
     """
@@ -79,7 +82,7 @@ def draw_result(probabilities, categories, colors):
     plt.yticks(fontsize=fontsize)
     plt.xlabel('Probability', fontsize=fontsize)
     plt.ylabel('DR Category', fontsize=fontsize)
-    plt.title('Probability Distribution for Different DR Categories', fontsize=fontsize)
+    plt.title('Probability Distribution for Different Categories', fontsize=fontsize)
     plt.xlim(0, 1)  # Ensuring the x-axis ranges from 0 to 1
 
     # plt.show()
@@ -94,8 +97,10 @@ if __name__ == '__main__':
     # parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str)
+    parser.add_argument("--data_format", type=str, default="*")
     parser.add_argument("--num_classes", type=int, default=2)
     parser.add_argument("--resume", type=str)
+
     args = parser.parse_args()
 
     # chose fine-tuned model from 'checkpoint'
@@ -105,9 +110,8 @@ if __name__ == '__main__':
     # supports single files or folders
     data_path = args.data_path
     images = [data_path] if os.path.isfile(data_path) else \
-        [i for i in os.listdir(data_path) if os.path.isfile(i)]
+        [str(path) for path in pathlib.Path(data_path).rglob(f"*.{args.data_format}")]
 
     # run classification for each image
     for img in images:
-        x = prepare_image(img)
-        run_classification(x=x, model=model)
+        run_classification(img=img, model=model)
