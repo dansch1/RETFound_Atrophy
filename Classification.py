@@ -92,9 +92,9 @@ def draw_result(probabilities, categories, colors):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument(name_or_flags="--data_path", type=str)
-    parser.add_argument(name_or_flags="--num_classes", type=int, default=2)
-    parser.add_argument(name_or_flags="--resume", type=str)
+    parser.add_argument("--data_path", type=str)
+    parser.add_argument("--num_classes", type=int, default=2)
+    parser.add_argument("--resume", type=str)
     args = parser.parse_args()
 
     # chose fine-tuned model from 'checkpoint'
