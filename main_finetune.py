@@ -6,6 +6,8 @@
 import argparse
 import datetime
 import json
+import shutil
+
 import numpy as np
 import os
 import time
@@ -167,9 +169,14 @@ def main(args):
     cudnn.benchmark = True
 
     # remove .ipynb_checkpoints folder
+    # as it messes up the class labels
     for d in os.listdir(args.data_path):
         if d == ".ipynb_checkpoints":
-            os.rmdir(d)
+            try:
+                shutil.rmtree(d)
+                print(f"Folder and its content removed: '{d}'")
+            except OSError:
+                print(f"Folder not deleted: {d}")
 
     dataset_train = build_dataset(is_train='train', args=args)
     dataset_val = build_dataset(is_train='val', args=args)
