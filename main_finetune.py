@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import timm
 
-assert timm.__version__ == "0.3.2" # version check
+assert timm.__version__ == "0.3.2"  # version check
 from timm.models.layers import trunc_normal_
 from timm.data.mixup import Mixup
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
@@ -103,9 +103,9 @@ def get_args_parser():
                         help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
 
     # * Finetuning params
-    parser.add_argument('--finetune', default='',type=str,
+    parser.add_argument('--finetune', default='', type=str,
                         help='finetune from checkpoint')
-    parser.add_argument('--task', default='',type=str,
+    parser.add_argument('--task', default='', type=str,
                         help='finetune from checkpoint')
     parser.add_argument('--global_pool', action='store_true')
     parser.set_defaults(global_pool=True)
@@ -166,6 +166,11 @@ def main(args):
 
     cudnn.benchmark = True
 
+    # remove .ipynb_checkpoints folder
+    for d in os.listdir(args.data_path):
+        if d == ".ipynb_checkpoints":
+            os.rmdir(d)
+
     dataset_train = build_dataset(is_train='train', args=args)
     dataset_val = build_dataset(is_train='val', args=args)
     dataset_test = build_dataset(is_train='test', args=args)
@@ -183,24 +188,25 @@ def main(args):
                       'This will slightly alter validation results as extra duplicate entries are added to achieve '
                       'equal num of samples per-process.')
             sampler_val = torch.utils.data.DistributedSampler(
-                dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=True)  # shuffle=True to reduce monitor bias
+                dataset_val, num_replicas=num_tasks, rank=global_rank,
+                shuffle=True)  # shuffle=True to reduce monitor bias
         else:
             sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-            
+
         if args.dist_eval:
             if len(dataset_test) % num_tasks != 0:
                 print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
                       'This will slightly alter validation results as extra duplicate entries are added to achieve '
                       'equal num of samples per-process.')
             sampler_test = torch.utils.data.DistributedSampler(
-                dataset_test, num_replicas=num_tasks, rank=global_rank, shuffle=True)  # shuffle=True to reduce monitor bias
+                dataset_test, num_replicas=num_tasks, rank=global_rank,
+                shuffle=True)  # shuffle=True to reduce monitor bias
         else:
             sampler_test = torch.utils.data.SequentialSampler(dataset_test)
-            
 
     if global_rank == 0 and args.log_dir is not None and not args.eval:
         os.makedirs(args.log_dir, exist_ok=True)
-        log_writer = SummaryWriter(log_dir=args.log_dir+args.task)
+        log_writer = SummaryWriter(log_dir=args.log_dir + args.task)
     else:
         log_writer = None
 
@@ -227,8 +233,7 @@ def main(args):
         pin_memory=args.pin_mem,
         drop_last=False
     )
-    
-    
+
     mixup_fn = None
     mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
     if mixup_active:
@@ -237,7 +242,7 @@ def main(args):
             mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
             prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
             label_smoothing=args.smoothing, num_classes=args.nb_classes)
-    
+
     model = models_vit.__dict__[args.model](
         img_size=args.input_size,
         num_classes=args.nb_classes,
@@ -280,7 +285,7 @@ def main(args):
     print('number of params (M): %.2f' % (n_parameters / 1.e6))
 
     eff_batch_size = args.batch_size * args.accum_iter * misc.get_world_size()
-    
+
     if args.lr is None:  # only base_lr is specified
         args.lr = args.blr * eff_batch_size / 256
 
@@ -296,9 +301,9 @@ def main(args):
 
     # build optimizer with layer-wise lr decay (lrd)
     param_groups = lrd.param_groups_lrd(model_without_ddp, args.weight_decay,
-        no_weight_decay_list=model_without_ddp.no_weight_decay(),
-        layer_decay=args.layer_decay
-    )
+                                        no_weight_decay_list=model_without_ddp.no_weight_decay(),
+                                        layer_decay=args.layer_decay
+                                        )
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
     loss_scaler = NativeScaler()
 
@@ -315,7 +320,8 @@ def main(args):
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
     if args.eval:
-        test_stats,auc_roc = evaluate(data_loader_test, model, device, args.task, epoch=0, mode='test',num_class=args.nb_classes)
+        test_stats, auc_roc = evaluate(data_loader_test, model, device, args.task, epoch=0, mode='test',
+                                       num_class=args.nb_classes)
         exit(0)
 
     print(f"Start training for {args.epochs} epochs")
@@ -333,23 +339,24 @@ def main(args):
             args=args
         )
 
-        val_stats,val_auc_roc = evaluate(data_loader_val, model, device,args.task,epoch, mode='val',num_class=args.nb_classes)
-        if max_auc<val_auc_roc:
+        val_stats, val_auc_roc = evaluate(data_loader_val, model, device, args.task, epoch, mode='val',
+                                          num_class=args.nb_classes)
+        if max_auc < val_auc_roc:
             max_auc = val_auc_roc
-            
+
             if args.output_dir:
                 misc.save_model(
                     args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                     loss_scaler=loss_scaler, epoch=epoch)
-        
+
         if log_writer is not None:
             log_writer.add_scalar('perf/val_acc1', val_stats['acc1'], epoch)
             log_writer.add_scalar('perf/val_auc', val_auc_roc, epoch)
             log_writer.add_scalar('perf/val_loss', val_stats['loss'], epoch)
-            
+
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                        'epoch': epoch,
-                        'n_parameters': n_parameters}
+                     'epoch': epoch,
+                     'n_parameters': n_parameters}
 
         if args.output_dir and misc.is_main_process():
             if log_writer is not None:
@@ -357,13 +364,14 @@ def main(args):
             with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
                 f.write(json.dumps(log_stats) + "\n")
 
-                
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Training time {}'.format(total_time_str))
-    state_dict_best = torch.load(args.task+'checkpoint-best.pth', map_location='cpu')
+    state_dict_best = torch.load(args.task + 'checkpoint-best.pth', map_location='cpu')
     model_without_ddp.load_state_dict(state_dict_best['model'])
-    test_stats,auc_roc = evaluate(data_loader_test, model_without_ddp, device,args.task,epoch=0, mode='test',num_class=args.nb_classes)
+    test_stats, auc_roc = evaluate(data_loader_test, model_without_ddp, device, args.task, epoch=0, mode='test',
+                                   num_class=args.nb_classes)
+
 
 if __name__ == '__main__':
     args = get_args_parser()
