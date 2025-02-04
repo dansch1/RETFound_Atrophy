@@ -13,6 +13,7 @@ import models_vit
 imagenet_mean = np.array([0.485, 0.456, 0.406])
 imagenet_std = np.array([0.229, 0.224, 0.225])
 
+CLASS_NAMES = ["Atrophy", "Normal"]
 
 def prepare_ft_model(chkpt_dir, num_classes):
     model = models_vit.__dict__["vit_large_patch16"](
@@ -53,14 +54,14 @@ def prepare_image(img_path):
 def run_classification(img, model):
     x = prepare_image(img)
 
-    # model inference
+    # model inferenceda
     with torch.no_grad():
         output = model(x)
 
     output = nn.Softmax(dim=1)(output)
     output = output.squeeze(0).cpu().detach().numpy()
 
-    print(f"Results for {img}: {output}")
+    print(f"Results for {img}: {output} -> {CLASS_NAMES[np.argmax(output)]}")
 
     # visualization
     """
@@ -98,6 +99,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str)
     parser.add_argument("--data_format", type=str, default="*")
+    parser.add_argument("--mode", type=str, default="Classification", choices=["Classification", "ObjectDetection"])
     parser.add_argument("--num_classes", type=int, default=2)
     parser.add_argument("--resume", type=str)
 
