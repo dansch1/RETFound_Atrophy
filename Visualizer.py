@@ -38,7 +38,7 @@ def prepare_image(img_path, input_size):
     img = img.resize((input_size, input_size))
     img = np.array(img) / 255.
 
-    assert img.shape == (224, 224, 3)
+    assert img.shape == (input_size, input_size, 3)
 
     # normalize by mean and sd
     img = img - imagenet_mean
