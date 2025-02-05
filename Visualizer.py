@@ -16,11 +16,12 @@ imagenet_std = np.array([0.229, 0.224, 0.225])
 CLASS_NAMES = ["Atrophy", "Normal"]
 
 
-def prepare_ft_model(chkpt_dir, num_classes):
+def prepare_ft_model(chkpt_dir, num_classes, input_size):
     model = models_vit.__dict__["vit_large_patch16"](
         num_classes=num_classes,
         drop_path_rate=0.1,
         global_pool=True,
+        img_size=input_size,
     )
 
     checkpoint = torch.load(chkpt_dir, map_location="cpu")
@@ -108,7 +109,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # chose fine-tuned model from 'checkpoint'
-    model = prepare_ft_model(chkpt_dir=args.resume, num_classes=args.num_classes)
+    model = prepare_ft_model(chkpt_dir=args.resume, num_classes=args.num_classes, input_size=args.input_size)
 
     # get all images
     # supports single files or folders
