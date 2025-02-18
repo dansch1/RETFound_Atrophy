@@ -4,7 +4,7 @@ import pathlib
 
 import numpy as np
 import torch
-from PIL import Image
+from PIL import Image, ImageDraw
 from matplotlib import pyplot as plt
 from torch import nn
 
@@ -13,7 +13,13 @@ import models_vit
 imagenet_mean = np.array([0.485, 0.456, 0.406])
 imagenet_std = np.array([0.229, 0.224, 0.225])
 
+ANNOTATIONS = r""
+
+X_OFFSET, Y_OFFSET = (496, 0)
+
 CLASS_NAMES = ["Atrophy", "Normal"]
+CLASS_COLORS = {"iORA": "green", "cORA": "blue", "iRORA": "yellow", "cRORA": "red", "unknown": "pink",
+                "multiple": "brown"}
 
 
 def prepare_ft_model(chkpt_dir, num_classes, input_size):
@@ -65,35 +71,83 @@ def run_classification(img_path, input_size, model):
 
     print(f"Results for {img_path}: {output} -> {CLASS_NAMES[np.argmax(output)]}")
 
-    # visualization
-    """
-    categories = ["Atrophy", "Normal"]
-    colors = ["red", "green"]
-    prob_result = draw_result(output, categories, colors)
 
-    Image.fromarray(prob_result).save('classification.png')
-    """
+def annotate_images(image_paths, annotations):
+    for filename in image_paths:
+        basename = os.path.basename(filename)
+        bboxes = annotations.findall(f"image[@name='{basename}']/box")
+
+        intervals = []
+
+        # get intervals from bboxes
+        for bbox in bboxes:
+            # get start and end point
+            x0, x1 = float(bbox.get("xtl")), float(bbox.get("xbr"))
+            intervals.append([x0, x1])
+
+        intervals = combine_intervals(intervals)
+        draw_intervals(filename=filename, intervals=intervals, colors="red", tag="annotated")
 
 
-def draw_result(probabilities, categories, colors):
-    # Creating the bar plot
-    fig = plt.figure(figsize=(12, 10))
-    plt.barh(categories, probabilities, color=colors)
-    fontsize = 12
+def combine_intervals(intervals):
+    if len(intervals) <= 1:
+        return
 
-    plt.xticks(fontsize=fontsize)
-    plt.yticks(fontsize=fontsize)
-    plt.xlabel('Probability', fontsize=fontsize)
-    plt.ylabel('DR Category', fontsize=fontsize)
-    plt.title('Probability Distribution for Different Categories', fontsize=fontsize)
-    plt.xlim(0, 1)  # Ensuring the x-axis ranges from 0 to 1
+    sorted_intervals = sorted(intervals, key=lambda l: l[0])
+    result = [sorted_intervals[0]]
 
-    # plt.show()
-    fig.canvas.draw()
-    data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    for i in range(1, len(sorted_intervals)):
+        if abs(result[-1][1] - sorted_intervals[i][0]) < 10:
+            result[-1][1] = sorted_intervals[i][1]
+        else:
+            result.append(sorted_intervals[i])
 
-    return data
+    return result
+
+
+def multi_annotate_images(image_paths, annotations):
+    for filename in image_paths:
+        basename = os.path.basename(filename)
+        bboxes = annotations.findall(f"image[@name='{basename}']/box")
+
+        intervals = []
+        colors = []
+
+        for bbox in bboxes:
+            # get start and end point
+            x0, x1 = float(bbox.get("xtl")), float(bbox.get("xbr"))
+
+            # get color
+            cls = [attribute.get("name") for attribute in bbox.findall("attribute") if attribute.text == "true"]
+
+            if len(cls) == 0:
+                print(f"Bounding box of {filename} has no class assigned")
+                cls = ["unknown"]
+
+            if len(cls) > 1:
+                print(f"Bounding box of {filename} has multiple classes")
+                cls = ["multiple"]
+
+            intervals.append([x0, x1])
+            colors.append(CLASS_COLORS[cls[0]])
+
+        draw_intervals(filename=filename, intervals=intervals, colors=colors, tag="multi_annotated")
+
+
+def draw_intervals(filename, intervals, colors, tag):
+    path = os.path.dirname(filename)
+
+    image = Image.open(filename)
+    draw = ImageDraw.Draw(image)
+
+    for i, (x0, x1) in enumerate(intervals):
+        # draw bbox
+        draw.rectangle(xy=((max(x0 - X_OFFSET, 0), 0), (min(x1 - X_OFFSET, image.width - 1), image.height - 1)),
+                       outline=colors if type(colors) is str else colors[i])
+
+        # save annotated image
+        name, extension = os.path.splitext(filename)
+        image.save(os.path.join(path, f"{name}_{tag}{extension}"))
 
 
 if __name__ == '__main__':
