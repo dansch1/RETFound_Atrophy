@@ -91,12 +91,15 @@ def annotate_images(image_paths, annotations):
 
 def combine_intervals(intervals):
     if len(intervals) <= 1:
-        return
+        return intervals
 
     sorted_intervals = sorted(intervals, key=lambda l: l[0])
     result = [sorted_intervals[0]]
 
     for i in range(1, len(sorted_intervals)):
+        if result[-1][1] >= sorted_intervals[i][1]:
+            continue
+
         if abs(result[-1][1] - sorted_intervals[i][0]) < 10:
             result[-1][1] = sorted_intervals[i][1]
         else:
