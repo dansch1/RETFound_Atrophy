@@ -15,6 +15,8 @@ from pathlib import Path
 
 import torch
 import torch.backends.cudnn as cudnn
+from torch.nn import SmoothL1Loss
+from torch.nn.functional import smooth_l1_loss
 from torch.utils.tensorboard import SummaryWriter
 
 import timm
@@ -181,7 +183,7 @@ def main(args):
             except OSError:
                 print(f"Folder not deleted: {d}")
 
-    dataset_builder = build_interval_dataset if args.model == "interval" else build_dataset
+    dataset_builder = build_interval_dataset if args.model == "interval_detector" else build_dataset
 
     dataset_train = dataset_builder(is_train='train', args=args)
     dataset_val = dataset_builder(is_train='val', args=args)
@@ -319,7 +321,9 @@ def main(args):
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
     loss_scaler = NativeScaler()
 
-    if mixup_fn is not None:
+    if args.model == "interval_detector":
+        criterion = SmoothL1Loss()
+    elif mixup_fn is not None:
         # smoothing is handled with mixup label transform
         criterion = SoftTargetCrossEntropy()
     elif args.smoothing > 0.:
