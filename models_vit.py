@@ -49,11 +49,11 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
 
 
 class IntervalDetector(VisionTransformer):
-    def __init__(self, embed_dim, max_intervals, **kwargs):
+    def __init__(self, max_intervals, **kwargs):
         super().__init__(**kwargs)
 
         self.max_intervals = max_intervals
-        self.head = nn.Linear(embed_dim, 2 * max_intervals)  # (x0, x1) for MAX_INTERVALS
+        self.head = nn.Linear(kwargs['embed_dim'], 2 * max_intervals)  # (x0, x1) for MAX_INTERVALS
 
     def forward(self, x):
         x = self.forward_features(x)
