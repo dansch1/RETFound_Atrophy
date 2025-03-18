@@ -26,7 +26,7 @@ from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 
 import util.lr_decay as lrd
 import util.misc as misc
-from util.datasets import build_dataset
+from util.datasets import build_dataset, build_interval_dataset
 from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
@@ -150,6 +150,9 @@ def get_args_parser():
     parser.add_argument('--dist_url', default='env://',
                         help='url used to set up distributed training')
 
+    parser.add_argument('--annotations', type=str, help='annotations path')
+    parser.add_argument('--max_intervals', default=10, type=int, help='number of intervals predicted by the model')
+
     return parser
 
 
@@ -178,9 +181,11 @@ def main(args):
             except OSError:
                 print(f"Folder not deleted: {d}")
 
-    dataset_train = build_dataset(is_train='train', args=args)
-    dataset_val = build_dataset(is_train='val', args=args)
-    dataset_test = build_dataset(is_train='test', args=args)
+    dataset_builder = build_interval_dataset if args.model == "interval" else build_dataset
+
+    dataset_train = dataset_builder(is_train='train', args=args)
+    dataset_val = dataset_builder(is_train='val', args=args)
+    dataset_test = dataset_builder(is_train='test', args=args)
 
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()
