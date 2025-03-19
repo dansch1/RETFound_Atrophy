@@ -133,11 +133,14 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
 
 @torch.no_grad()
-def evaluate(data_loader, model, device, task, epoch, mode, num_class):
+def evaluate(data_loader, model, device, epoch, mode, args):
     criterion = torch.nn.CrossEntropyLoss()
 
     metric_logger = misc.MetricLogger(delimiter="  ")
     header = 'Test:'
+
+    task = args.task
+    num_class = args.nb_classes
 
     if not os.path.exists(task):
         os.makedirs(task)
@@ -207,19 +210,23 @@ def evaluate(data_loader, model, device, task, epoch, mode, num_class):
 
 
 @torch.no_grad()
-def evaluate_intervals(data_loader, model, device, task, epoch, mode, num_class):
+def evaluate_intervals(data_loader, model, device, epoch, mode, args):
     criterion = IntervalClassLoss()
 
     metric_logger = misc.MetricLogger(delimiter="  ")
     header = 'Test:'
 
+    task = args.task
+    num_class = args.nb_classes
+    max_intervals = args.max_intervals
+
     if not os.path.exists(task):
         os.makedirs(task)
 
-    prediction_decode_list = []
-    prediction_list = []
-    # true_label_decode_list = []
-    # true_label_onehot_list = []
+    interval_prediction_list = []
+    class_prediction_list = []
+    true_interval_list = []
+    true_class_list = []
 
     # switch to evaluation mode
     model.eval()
@@ -229,61 +236,58 @@ def evaluate_intervals(data_loader, model, device, task, epoch, mode, num_class)
         target = batch[-1]
         images = images.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
-        # true_label = F.one_hot(target.to(torch.int64), num_classes=num_class)
 
         # compute output
         with torch.cuda.amp.autocast():
-            output = model(images)
-            loss = criterion(output, target)
+            interval_pred, class_pred = model(images)
+            loss = criterion((interval_pred, class_pred), target)
 
-            prediction_softmax = nn.Softmax(dim=1)(output)
-            _, prediction_decode = torch.max(prediction_softmax, 1)
-            # _, true_label_decode = torch.max(true_label, 1)
+            class_pred_softmax = nn.Softmax(dim=2)(class_pred)  # (batch, max_intervals, num_classes)
+            class_pred_decoded = torch.argmax(class_pred_softmax, dim=2)  # (batch, max_intervals)
 
-            prediction_decode_list.extend(prediction_decode.cpu().detach().numpy())
-            # true_label_decode_list.extend(true_label_decode.cpu().detach().numpy())
-            # true_label_onehot_list.extend(true_label.cpu().detach().numpy())
-            prediction_list.extend(prediction_softmax.cpu().detach().numpy())
+            interval_prediction_list.extend(interval_pred.cpu().detach().numpy())
+            class_prediction_list.extend(class_pred_softmax.cpu().detach().numpy())
+            true_interval_list.extend(target[..., :2 * max_intervals].cpu().detach().numpy())
+            true_class_list.extend(target[..., 2 * max_intervals].cpu().detach().numpy())
 
-        # Berechne Intersection (Überlappung)
-        intersection = torch.max(output[..., 0], target[..., 0]), torch.min(output[..., 1], target[..., 1])
-        intersection_length = torch.clamp(intersection[1] - intersection[0], min=0)
-
-        # Berechne Union (Gesamtbereich)
-        union_length = (output[..., 1] - output[..., 0]) + (target[..., 1] - target[..., 0]) - intersection_length
-
-        # Berechne IoU
-        iou = intersection_length / union_length
-        iou_mean = iou.mean()
-
-        print(f"Mean IoU: {iou_mean.item():.4f}")
-        # acc1, _ = accuracy(output, target, topk=(1, 2))
+        acc1, _ = accuracy(class_pred_decoded.reshape(-1, max_intervals),
+                           target[..., 2 * max_intervals].reshape(-1, max_intervals), topk=(1, 2))
 
         batch_size = images.shape[0]
         metric_logger.update(loss=loss.item())
-        metric_logger.meters['acc1'].update(iou_mean.item(), n=batch_size)
-    # gather the stats from all processes
-    # true_label_decode_list = np.array(true_label_decode_list)
-    prediction_decode_list = np.array(prediction_decode_list)
-    # confusion_matrix = multilabel_confusion_matrix(true_label_decode_list, prediction_decode_list, labels=[i for i in range(num_class)])
-    # acc, sensitivity, specificity, precision, G, F1, mcc = misc_measures(confusion_matrix)
+        metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
 
-    auc_roc = roc_auc_score(true_label_onehot_list, prediction_list, multi_class='ovr', average='macro')
-    # auc_pr = average_precision_score(true_label_onehot_list, prediction_list, average='macro')
+    # gather the stats from all processes
+    true_class_list = np.array(true_class_list).reshape(-1, max_intervals)
+    class_prediction_list = np.array(class_prediction_list).reshape(-1, max_intervals, 2)
+
+    confusion_matrix = multilabel_confusion_matrix(true_class_list.flatten(),
+                                                   class_prediction_list.argmax(axis=2).flatten(),
+                                                   labels=[i for i in range(num_class)])
+    acc, sensitivity, specificity, precision, G, F1, mcc = misc_measures(confusion_matrix)
+
+    auc_roc = roc_auc_score(true_class_list.flatten(), class_prediction_list[:, :, 1].flatten(), average='macro')
+    auc_pr = average_precision_score(true_class_list.flatten(), class_prediction_list[:, :, 1].flatten(),
+                                     average='macro')
 
     metric_logger.synchronize_between_processes()
 
-    # print('Sklearn Metrics - Acc: {:.4f} AUC-roc: {:.4f} AUC-pr: {:.4f} F1-score: {:.4f} MCC: {:.4f}'.format(acc, auc_roc,auc_pr, F1, mcc))
-    results_path = task + '_metrics_{}.csv'.format(mode)
-    # with open(results_path, mode='a', newline='', encoding='utf8') as cfa:
-    # wf = csv.writer(cfa)
-    # data2 = [[acc, sensitivity, specificity, precision, auc_roc, auc_pr, F1, mcc, metric_logger.loss]]
-    # for i in data2:
-    # wf.writerow(i)
+    print(
+        'Sklearn Metrics - Acc: {:.4f} AUC-roc: {:.4f} AUC-pr: {:.4f} F1-score: {:.4f} MCC: {:.4f}'.format(acc, auc_roc,
+                                                                                                           auc_pr, F1,
+                                                                                                           mcc))
+    results_path = os.path.join(task, '_metrics_{}.csv'.format(mode))
+    with open(results_path, mode='a', newline='', encoding='utf8') as cfa:
+        wf = csv.writer(cfa)
+        data2 = [[acc, sensitivity, specificity, precision, auc_roc, auc_pr, F1, mcc, metric_logger.loss]]
+        for i in data2:
+            wf.writerow(i)
 
-    # if mode == 'test':
-    # cm = ConfusionMatrix(actual_vector=true_label_decode_list, predict_vector=prediction_decode_list)
-    # cm.plot(cmap=plt.cm.Blues, number_label=True, normalized=True, plot_lib="matplotlib")
-    # plt.savefig(task + 'confusion_matrix_test.jpg', dpi=600, bbox_inches='tight')
+    if mode == 'test':
+        from pycm import ConfusionMatrix
+        cm = ConfusionMatrix(actual_vector=true_class_list.flatten(),
+                             predict_vector=class_prediction_list.argmax(axis=2).flatten())
+        cm.plot(cmap=plt.cm.Blues, number_label=True, normalized=True, plot_lib="matplotlib")
+        plt.savefig(os.path.join(task, 'confusion_matrix_test.jpg'), dpi=600, bbox_inches='tight')
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, auc_roc
