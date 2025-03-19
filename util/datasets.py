@@ -80,8 +80,8 @@ class IntervalDataset(Dataset):
         image = Image.open(image_path).convert("RGB")
         targets = self.data[idx]["targets"]
 
-        while len(targets) < self.max_intervals + 1:
-            targets.append([-1, -1, -1])
+        while len(targets) < self.max_intervals:
+            targets.append([-100, -100, -100])
         targets = torch.tensor(targets[:self.max_intervals + 1], dtype=torch.float32)
 
         if self.transform:

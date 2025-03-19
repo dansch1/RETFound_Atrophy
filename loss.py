@@ -8,7 +8,7 @@ class IntervalClassLoss(nn.Module):
 
     def __init__(self, interval_size_average=None, interval_reduce=None, interval_reduction: str = 'mean',
                  interval_beta: float = 1.0, class_weight: Optional[Tensor] = None, class_size_average=None,
-                 class_ignore_index: int = -1, class_reduce=None, class_reduction: str = 'mean') -> None:
+                 class_ignore_index: int = -100, class_reduce=None, class_reduction: str = 'mean') -> None:
         super().__init__()
 
         self.interval_loss = SmoothL1Loss(interval_size_average, interval_reduce, interval_reduction, interval_beta)
