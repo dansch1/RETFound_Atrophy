@@ -21,6 +21,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 import timm
 
+from loss import IntervalClassLoss
+
 assert timm.__version__ == "0.3.2"  # version check
 from timm.models.layers import trunc_normal_
 from timm.data.mixup import Mixup
@@ -322,7 +324,7 @@ def main(args):
     loss_scaler = NativeScaler()
 
     if args.model == "interval_detector":
-        criterion = SmoothL1Loss()
+        criterion = IntervalClassLoss()
     elif mixup_fn is not None:
         # smoothing is handled with mixup label transform
         criterion = SoftTargetCrossEntropy()

@@ -53,15 +53,18 @@ class IntervalDetector(VisionTransformer):
         super().__init__(**kwargs)
 
         self.max_intervals = max_intervals
-        self.head = nn.Linear(kwargs['embed_dim'], 2 * max_intervals)  # (x0, x1) for MAX_INTERVALS
+        # (x0, x1) + num_classes for each interval
+        self.head = nn.Linear(self.embed_dim, (2 + self.num_classes) * self.max_intervals)
 
     def forward(self, x):
         x = self.forward_features(x)
 
-        interval_preds = self.head(x)
-        interval_preds = interval_preds.view(-1, self.max_intervals, 2)
+        preds = self.head(x)  # Shape: (batch_size, max_intervals * (2 + num_classes))
 
-        return interval_preds
+        interval_preds = preds[:, :self.max_intervals * 2].view(-1, self.max_intervals, 2)
+        class_preds = preds[:, self.max_intervals * 2:].view(-1, self.max_intervals, self.num_classes)
+
+        return interval_preds, class_preds
 
 
 def vit_large_patch16(**kwargs):

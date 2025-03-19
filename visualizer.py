@@ -9,6 +9,7 @@ from matplotlib import pyplot as plt
 from torch import nn
 
 import models_vit
+from annotations import combine_intervals
 
 imagenet_mean = np.array([0.485, 0.456, 0.406])
 imagenet_std = np.array([0.229, 0.224, 0.225])
@@ -87,25 +88,6 @@ def annotate_images(image_paths, annotations):
 
         intervals = combine_intervals(intervals)
         draw_intervals(filename=filename, intervals=intervals, colors="red", tag="annotated")
-
-
-def combine_intervals(intervals):
-    if len(intervals) <= 1:
-        return intervals
-
-    sorted_intervals = sorted(intervals, key=lambda l: l[0])
-    result = [sorted_intervals[0]]
-
-    for i in range(1, len(sorted_intervals)):
-        if result[-1][1] >= sorted_intervals[i][1]:
-            continue
-
-        if abs(result[-1][1] - sorted_intervals[i][0]) < 10:
-            result[-1][1] = sorted_intervals[i][1]
-        else:
-            result.append(sorted_intervals[i])
-
-    return result
 
 
 def multi_annotate_images(image_paths, annotations):

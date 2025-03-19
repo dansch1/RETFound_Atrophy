@@ -78,13 +78,13 @@ class IntervalDataset(Dataset):
     def __getitem__(self, idx):
         image_path = self.data[idx]["image"]
         image = Image.open(image_path).convert("RGB")
-        intervals = self.data[idx]["intervals"]
+        targets = self.data[idx]["targets"]
 
-        while len(intervals) < self.max_intervals:
-            intervals.append([-1, -1])
-        intervals = torch.tensor(intervals[:self.max_intervals], dtype=torch.float32)
+        while len(targets) < self.max_intervals + 1:
+            targets.append([-1, -1, -1])
+        targets = torch.tensor(targets[:self.max_intervals + 1], dtype=torch.float32)
 
         if self.transform:
             image = self.transform(image)
 
-        return image, intervals
+        return image, targets

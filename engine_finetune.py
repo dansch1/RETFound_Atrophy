@@ -21,6 +21,8 @@ from pycm import *
 import matplotlib.pyplot as plt
 import numpy as np
 
+from loss import IntervalClassLoss
+
 
 def misc_measures(confusion_matrix):
     acc = []
@@ -206,7 +208,7 @@ def evaluate(data_loader, model, device, task, epoch, mode, num_class):
 
 @torch.no_grad()
 def evaluate_intervals(data_loader, model, device, task, epoch, mode, num_class):
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = IntervalClassLoss()
 
     metric_logger = misc.MetricLogger(delimiter="  ")
     header = 'Test:'
@@ -233,6 +235,7 @@ def evaluate_intervals(data_loader, model, device, task, epoch, mode, num_class)
         with torch.cuda.amp.autocast():
             output = model(images)
             loss = criterion(output, target)
+
             prediction_softmax = nn.Softmax(dim=1)(output)
             _, prediction_decode = torch.max(prediction_softmax, 1)
             # _, true_label_decode = torch.max(true_label, 1)
@@ -242,26 +245,35 @@ def evaluate_intervals(data_loader, model, device, task, epoch, mode, num_class)
             # true_label_onehot_list.extend(true_label.cpu().detach().numpy())
             prediction_list.extend(prediction_softmax.cpu().detach().numpy())
 
-        acc1, _ = accuracy(output, target, topk=(1, 2))
+        # Berechne Intersection (Überlappung)
+        intersection = torch.max(output[..., 0], target[..., 0]), torch.min(output[..., 1], target[..., 1])
+        intersection_length = torch.clamp(intersection[1] - intersection[0], min=0)
+
+        # Berechne Union (Gesamtbereich)
+        union_length = (output[..., 1] - output[..., 0]) + (target[..., 1] - target[..., 0]) - intersection_length
+
+        # Berechne IoU
+        iou = intersection_length / union_length
+        iou_mean = iou.mean()
+
+        print(f"Mean IoU: {iou_mean.item():.4f}")
+        # acc1, _ = accuracy(output, target, topk=(1, 2))
 
         batch_size = images.shape[0]
         metric_logger.update(loss=loss.item())
-        metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
+        metric_logger.meters['acc1'].update(iou_mean.item(), n=batch_size)
     # gather the stats from all processes
     # true_label_decode_list = np.array(true_label_decode_list)
     prediction_decode_list = np.array(prediction_decode_list)
     # confusion_matrix = multilabel_confusion_matrix(true_label_decode_list, prediction_decode_list, labels=[i for i in range(num_class)])
     # acc, sensitivity, specificity, precision, G, F1, mcc = misc_measures(confusion_matrix)
 
-    # auc_roc = roc_auc_score(true_label_onehot_list, prediction_list, multi_class='ovr', average='macro')
+    auc_roc = roc_auc_score(true_label_onehot_list, prediction_list, multi_class='ovr', average='macro')
     # auc_pr = average_precision_score(true_label_onehot_list, prediction_list, average='macro')
 
     metric_logger.synchronize_between_processes()
 
-    print(
-        'Sklearn Metrics - Acc: {:.4f} AUC-roc: {:.4f} AUC-pr: {:.4f} F1-score: {:.4f} MCC: {:.4f}'.format(acc, auc_roc,
-                                                                                                           auc_pr, F1,
-                                                                                                           mcc))
+    # print('Sklearn Metrics - Acc: {:.4f} AUC-roc: {:.4f} AUC-pr: {:.4f} F1-score: {:.4f} MCC: {:.4f}'.format(acc, auc_roc,auc_pr, F1, mcc))
     results_path = task + '_metrics_{}.csv'.format(mode)
     # with open(results_path, mode='a', newline='', encoding='utf8') as cfa:
     # wf = csv.writer(cfa)
@@ -274,4 +286,4 @@ def evaluate_intervals(data_loader, model, device, task, epoch, mode, num_class)
     # cm.plot(cmap=plt.cm.Blues, number_label=True, normalized=True, plot_lib="matplotlib")
     # plt.savefig(task + 'confusion_matrix_test.jpg', dpi=600, bbox_inches='tight')
 
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, 0  # auc_roc
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, auc_roc
