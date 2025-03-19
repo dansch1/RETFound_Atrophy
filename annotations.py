@@ -3,8 +3,8 @@ import os
 
 from lxml import etree
 
-FILE_PATH = r"C:\Users\d_schr33\Desktop\Unterlagen\Promotion\Data\train_data"
-ANNOTATIONS = r"C:\Users\d_schr33\Desktop\Unterlagen\Promotion\Data\cam 2.0\annotations.xml"
+FILE_PATH = r""
+ANNOTATIONS = r""
 OUTPUT_FILE = r"annotations.json"
 
 # CLASS_TO_IDX = {"iORA": 0, "cORA": 0, "iRORA": 0, "cRORA": 0}  # 1 class: 0 - atrophy
@@ -75,7 +75,7 @@ def create_json(images, intervals):
     result = []
 
     for path, name in images:
-        result.append({"image": os.path.join(path, name), "intervals": intervals.get(name, [])})
+        result.append({"image": os.path.join(path, name), "targets": intervals.get(name, [])})
 
     with open(OUTPUT_FILE, "w") as f:
         json.dump(result, f, indent=4)
