@@ -134,13 +134,13 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
 @torch.no_grad()
 def evaluate(data_loader, model, device, epoch, mode, args):
+    task = args.task
+    num_classes = args.nb_classes
+
     criterion = torch.nn.CrossEntropyLoss()
 
     metric_logger = misc.MetricLogger(delimiter="  ")
     header = 'Test:'
-
-    task = args.task
-    num_class = args.nb_classes
 
     if not os.path.exists(task):
         os.makedirs(task)
@@ -158,7 +158,7 @@ def evaluate(data_loader, model, device, epoch, mode, args):
         target = batch[-1]
         images = images.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
-        true_label = F.one_hot(target.to(torch.int64), num_classes=num_class)
+        true_label = F.one_hot(target.to(torch.int64), num_classes=num_classes)
 
         # compute output
         with torch.cuda.amp.autocast():
@@ -182,7 +182,7 @@ def evaluate(data_loader, model, device, epoch, mode, args):
     true_label_decode_list = np.array(true_label_decode_list)
     prediction_decode_list = np.array(prediction_decode_list)
     confusion_matrix = multilabel_confusion_matrix(true_label_decode_list, prediction_decode_list,
-                                                   labels=[i for i in range(num_class)])
+                                                   labels=[i for i in range(num_classes)])
     acc, sensitivity, specificity, precision, G, F1, mcc = misc_measures(confusion_matrix)
 
     auc_roc = roc_auc_score(true_label_onehot_list, prediction_list, multi_class='ovr', average='macro')
@@ -211,14 +211,14 @@ def evaluate(data_loader, model, device, epoch, mode, args):
 
 @torch.no_grad()
 def evaluate_intervals(data_loader, model, device, epoch, mode, args):
-    criterion = IntervalClassLoss()
+    task = args.task
+    num_classes = args.nb_classes
+    max_intervals = args.max_intervals
+
+    criterion = IntervalClassLoss(num_classes)
 
     metric_logger = misc.MetricLogger(delimiter="  ")
     header = 'Test:'
-
-    task = args.task
-    num_class = args.nb_classes
-    max_intervals = args.max_intervals
 
     if not os.path.exists(task):
         os.makedirs(task)
@@ -247,11 +247,12 @@ def evaluate_intervals(data_loader, model, device, epoch, mode, args):
 
             interval_prediction_list.extend(interval_pred.cpu().detach().numpy())
             class_prediction_list.extend(class_pred_softmax.cpu().detach().numpy())
-            true_interval_list.extend(target[..., :2 * max_intervals].cpu().detach().numpy())
-            true_class_list.extend(target[..., 2 * max_intervals].cpu().detach().numpy())
+            true_interval_list.extend(target[..., :2].cpu().detach().numpy())
+            true_class_list.extend(target[..., 2].cpu().detach().numpy())
 
-        acc1, _ = accuracy(class_pred_decoded.reshape(-1, max_intervals),
-                           target[..., 2 * max_intervals].reshape(-1, max_intervals), topk=(1, 2))
+        # TODO
+        acc1, _ = accuracy(class_pred_decoded.reshape(-1, 2),
+                           target[..., 2].reshape(-1), topk=(1, 2))
 
         batch_size = images.shape[0]
         metric_logger.update(loss=loss.item())

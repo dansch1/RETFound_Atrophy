@@ -324,7 +324,7 @@ def main(args):
     loss_scaler = NativeScaler()
 
     if args.model == "interval_detector":
-        criterion = IntervalClassLoss()
+        criterion = IntervalClassLoss(args.nb_classes)
     elif mixup_fn is not None:
         # smoothing is handled with mixup label transform
         criterion = SoftTargetCrossEntropy()
