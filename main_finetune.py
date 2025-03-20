@@ -175,16 +175,6 @@ def main(args):
 
     cudnn.benchmark = True
 
-    # remove .ipynb_checkpoints folder
-    # as it messes up the class labels
-    for d in os.listdir(args.data_path):
-        if d == ".ipynb_checkpoints":
-            try:
-                shutil.rmtree(d)
-                print(f"Folder and its content removed: '{d}'")
-            except OSError:
-                print(f"Folder not deleted: {d}")
-
     dataset_builder = build_IC_dataset if args.model == "IC_detector" else build_dataset
 
     dataset_train = dataset_builder(is_train='train', args=args)

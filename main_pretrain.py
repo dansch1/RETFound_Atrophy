@@ -121,16 +121,6 @@ def main(args):
 
     cudnn.benchmark = True
 
-    # remove .ipynb_checkpoints folder
-    # as it messes up the class labels
-    for d in os.listdir(args.data_path):
-        if d == ".ipynb_checkpoints":
-            try:
-                shutil.rmtree(d)
-                print(f"Folder and its content removed: '{d}'")
-            except OSError:
-                print(f"Folder not deleted: {d}")
-
     # simple augmentation
     transform_train = transforms.Compose([
         transforms.RandomResizedCrop(args.input_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
