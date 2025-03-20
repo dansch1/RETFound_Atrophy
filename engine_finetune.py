@@ -21,7 +21,7 @@ from pycm import *
 import matplotlib.pyplot as plt
 import numpy as np
 
-from loss import IntervalClassLoss
+from loss import ICLoss
 
 
 def misc_measures(confusion_matrix):
@@ -215,7 +215,7 @@ def evaluate_IC(data_loader, model, device, epoch, mode, args):
     num_classes = args.nb_classes
     max_intervals = args.max_intervals
 
-    criterion = IntervalClassLoss(num_classes)
+    criterion = ICLoss(num_classes)
 
     metric_logger = misc.MetricLogger(delimiter="  ")
     header = 'Test:'
