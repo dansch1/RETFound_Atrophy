@@ -21,7 +21,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import timm
 
-from loss import IntervalClassLoss
+from loss import ICLoss
 
 assert timm.__version__ == "0.3.2"  # version check
 from timm.models.layers import trunc_normal_
@@ -30,13 +30,13 @@ from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 
 import util.lr_decay as lrd
 import util.misc as misc
-from util.datasets import build_dataset, build_interval_dataset
+from util.datasets import build_dataset, build_IC_dataset
 from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
 import models_vit
 
-from engine_finetune import train_one_epoch, evaluate, evaluate_intervals
+from engine_finetune import train_one_epoch, evaluate, evaluate_IC
 
 
 def get_args_parser():
@@ -185,7 +185,7 @@ def main(args):
             except OSError:
                 print(f"Folder not deleted: {d}")
 
-    dataset_builder = build_interval_dataset if args.model == "interval_detector" else build_dataset
+    dataset_builder = build_IC_dataset if args.model == "IC" else build_dataset
 
     dataset_train = dataset_builder(is_train='train', args=args)
     dataset_val = dataset_builder(is_train='val', args=args)
@@ -324,7 +324,7 @@ def main(args):
     loss_scaler = NativeScaler()
 
     if args.model == "interval_detector":
-        criterion = IntervalClassLoss(args.nb_classes)
+        criterion = ICLoss(args.nb_classes)
     elif mixup_fn is not None:
         # smoothing is handled with mixup label transform
         criterion = SoftTargetCrossEntropy()
@@ -337,7 +337,7 @@ def main(args):
 
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
-    eval_fn = evaluate_intervals if args.model == "interval_detector" else evaluate
+    eval_fn = evaluate_IC if args.model == "interval_detector" else evaluate
 
     if args.eval:
         test_stats, auc_roc = eval_fn(data_loader_test, model, device, epoch=0, mode='test',

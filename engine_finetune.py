@@ -210,7 +210,7 @@ def evaluate(data_loader, model, device, epoch, mode, args):
 
 
 @torch.no_grad()
-def evaluate_intervals(data_loader, model, device, epoch, mode, args):
+def evaluate_IC(data_loader, model, device, epoch, mode, args):
     task = args.task
     num_classes = args.nb_classes
     max_intervals = args.max_intervals

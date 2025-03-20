@@ -28,7 +28,7 @@ def load_annotations():
     return etree.parse(ANNOTATIONS).getroot()
 
 
-def load_intervals(images, annotations):
+def get_targets(images, annotations):
     result = {}
 
     for path, name in images:
@@ -71,19 +71,10 @@ def combine_intervals(intervals):
     return result
 
 
-def create_json(images, intervals):
-    result = []
-
-    for path, name in images:
-        result.append({"image_path": os.path.join(path, name), "targets": intervals.get(name, [])})
-
-    with open(OUTPUT_FILE, "w") as f:
-        json.dump(result, f, indent=4)
-
-
 if __name__ == "__main__":
     images = load_images()
     annotations = load_annotations()
-    intervals = load_intervals(images, annotations)
+    targets = get_targets(images, annotations)
 
-    create_json(images, intervals)
+    with open(OUTPUT_FILE, "w") as f:
+        json.dump(targets, f, indent=4)

@@ -8,11 +8,11 @@ import pathlib
 
 import torch
 from PIL import Image
-from lxml import etree
 from torchvision import datasets, transforms
 from timm.data import create_transform
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from torch.utils.data import Dataset
+import pandas as pd
 
 
 def build_dataset(is_train, args):
@@ -23,10 +23,10 @@ def build_dataset(is_train, args):
     return dataset
 
 
-def build_interval_dataset(is_train, args):
+def build_IC_dataset(is_train, args):
     transform = build_transform(is_train, args)
     root = os.path.join(args.data_path, is_train)
-    dataset = IntervalDataset(root, args, transform=transform)
+    dataset = ICDataset(root, args, transform=transform)
 
     return dataset
 
@@ -67,10 +67,13 @@ def build_transform(is_train, args):
     return transforms.Compose(t)
 
 
-class IntervalDataset(Dataset):
+class ICDataset(Dataset):
     def __init__(self, root, args, transform=None):
-        self.data = [str(path) for path in pathlib.Path(root).rglob(f"*.*")]
-        self.annotations = etree.parse(args.annotations).getroot()
+        self.data = [path for path in pathlib.Path(root).rglob("*") if
+                     path.suffix.lower() in {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tiff"}]
+
+        with open(args.annotations) as f:
+            self.annotations = json.loads(f.read())
 
         self.transform = transform
         self.max_intervals = args.max_intervals
@@ -81,8 +84,7 @@ class IntervalDataset(Dataset):
     def __getitem__(self, idx):
         image_path = self.data[idx]
         image = Image.open(image_path).convert("RGB")
-        annotations = self.annotations.find(image_path=image_path)
-        targets = [] if annotations is None else annotations["targets"]
+        targets = self.annotations.get(image_path.name, [])
 
         while len(targets) < self.max_intervals:
             targets.append([-1, -1, 0])

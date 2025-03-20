@@ -4,7 +4,7 @@ from torch import Tensor, nn
 from torch.nn import SmoothL1Loss, CrossEntropyLoss
 
 
-class IntervalClassLoss(nn.Module):
+class ICLoss(nn.Module):
 
     def __init__(self, num_classes, interval_size_average=None, interval_reduce=None, interval_reduction: str = 'mean',
                  interval_beta: float = 1.0, class_weight: Optional[Tensor] = None, class_size_average=None,
