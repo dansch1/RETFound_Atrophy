@@ -4,9 +4,11 @@
 # --------------------------------------------------------
 import json
 import os
+import pathlib
 
 import torch
 from PIL import Image
+from lxml import etree
 from torchvision import datasets, transforms
 from timm.data import create_transform
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
@@ -23,7 +25,8 @@ def build_dataset(is_train, args):
 
 def build_interval_dataset(is_train, args):
     transform = build_transform(is_train, args)
-    dataset = IntervalDataset(args, transform=transform)
+    root = os.path.join(args.data_path, is_train)
+    dataset = IntervalDataset(root, args, transform=transform)
 
     return dataset
 
@@ -65,9 +68,9 @@ def build_transform(is_train, args):
 
 
 class IntervalDataset(Dataset):
-    def __init__(self, args, transform=None):
-        with open(args.annotations, "r") as f:
-            self.data = json.load(f)
+    def __init__(self, root, args, transform=None):
+        self.data = [str(path) for path in pathlib.Path(root).rglob(f"*.*")]
+        self.annotations = etree.parse(args.annotations).getroot()
 
         self.transform = transform
         self.max_intervals = args.max_intervals
@@ -76,12 +79,14 @@ class IntervalDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        image_path = self.data[idx]["image"]
+        image_path = self.data[idx]
         image = Image.open(image_path).convert("RGB")
-        targets = self.data[idx]["targets"]
+        annotations = self.annotations.find(image_path=image_path)
+        targets = [] if annotations is None else annotations["targets"]
 
         while len(targets) < self.max_intervals:
             targets.append([-1, -1, 0])
+
         targets = torch.tensor(targets[:self.max_intervals + 1], dtype=torch.float32)
 
         if self.transform:

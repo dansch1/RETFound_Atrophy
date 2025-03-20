@@ -75,7 +75,7 @@ def create_json(images, intervals):
     result = []
 
     for path, name in images:
-        result.append({"image": os.path.join(path, name), "targets": intervals.get(name, [])})
+        result.append({"image_path": os.path.join(path, name), "targets": intervals.get(name, [])})
 
     with open(OUTPUT_FILE, "w") as f:
         json.dump(result, f, indent=4)
