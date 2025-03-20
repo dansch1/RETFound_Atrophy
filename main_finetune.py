@@ -323,7 +323,7 @@ def main(args):
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
     loss_scaler = NativeScaler()
 
-    if args.model == "interval_detector":
+    if args.model == "IC_detector":
         criterion = ICLoss(args.nb_classes)
     elif mixup_fn is not None:
         # smoothing is handled with mixup label transform
@@ -337,7 +337,7 @@ def main(args):
 
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
-    eval_fn = evaluate_IC if args.model == "interval_detector" else evaluate
+    eval_fn = evaluate_IC if args.model == "IC_detector" else evaluate
 
     if args.eval:
         test_stats, auc_roc = eval_fn(data_loader_test, model, device, epoch=0, mode='test',
