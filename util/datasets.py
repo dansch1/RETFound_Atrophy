@@ -81,7 +81,7 @@ class IntervalDataset(Dataset):
         targets = self.data[idx]["targets"]
 
         while len(targets) < self.max_intervals:
-            targets.append([-100, -100, -100])
+            targets.append([-1, -1, 0])
         targets = torch.tensor(targets[:self.max_intervals + 1], dtype=torch.float32)
 
         if self.transform:

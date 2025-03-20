@@ -3,15 +3,15 @@ import os
 
 from lxml import etree
 
-FILE_PATH = r""
-ANNOTATIONS = r""
+FILE_PATH = r"C:\Users\d_schr33\Desktop\Unterlagen\Promotion\Data\train_data"
+ANNOTATIONS = r"C:\Users\d_schr33\Desktop\Unterlagen\Promotion\Data\cam 2.0\annotations.xml"
 OUTPUT_FILE = r"annotations.json"
 
-# CLASS_TO_IDX = {"iORA": 0, "cORA": 0, "iRORA": 0, "cRORA": 0}  # 1 class: 0 - atrophy
-CLASS_TO_IDX = {"iORA": 0, "cORA": 0, "iRORA": 1, "cRORA": 1}  # 2 classes: 0 - iORA + cORA, 1 - iRORA + cRORA
+# CLASS_TO_IDX = {"iORA": 1, "cORA": 1, "iRORA": 1, "cRORA": 1}  # 1 class: 1 - atrophy
+CLASS_TO_IDX = {"iORA": 1, "cORA": 1, "iRORA": 2, "cRORA": 2}  # 2 classes: 1 - iORA + cORA, 2 - iRORA + cRORA
 
 
-# CLASS_TO_IDX = {"iORA": 0, "cORA": 1, "iRORA": 2, "cRORA": 3}  # 4 classes: 0 - iORA, 1 - cORA, 2 - iRORA, 3 - cRORA
+# CLASS_TO_IDX = {"iORA": 1, "cORA": 2, "iRORA": 3, "cRORA": 4}  # 4 classes: 1 - iORA, 2 - cORA, 3 - iRORA, 4 - cRORA
 
 
 def load_images():
