@@ -69,8 +69,7 @@ def build_transform(is_train, args):
 
 class ICDataset(Dataset):
     def __init__(self, root, args, transform=None):
-        self.data = [path for path in pathlib.Path(root).rglob("*") if
-                     path.suffix.lower() in {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tiff"}]
+        self.data = [path for path in pathlib.Path(root).rglob("*")]
 
         with open(args.annotations) as f:
             self.annotations = json.loads(f.read())

@@ -185,7 +185,7 @@ def main(args):
             except OSError:
                 print(f"Folder not deleted: {d}")
 
-    dataset_builder = build_IC_dataset if args.model == "IC" else build_dataset
+    dataset_builder = build_IC_dataset if args.model == "IC_detector" else build_dataset
 
     dataset_train = dataset_builder(is_train='train', args=args)
     dataset_val = dataset_builder(is_train='val', args=args)
