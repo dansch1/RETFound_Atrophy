@@ -330,8 +330,8 @@ def main(args):
     eval_fn = evaluate_IC if args.model == "IC_detector" else evaluate
 
     if args.eval:
-        test_stats, auc_roc = eval_fn(data_loader_test, model, device, epoch=0, mode='test',
-                                      args=args)
+        test_stats, auc_roc = eval_fn(data_loader_test, model, device, args.task, epoch=0, mode='test',
+                                      num_class=args.nb_classes)
         exit(0)
 
     print(f"Start training for {args.epochs} epochs")

@@ -5,7 +5,6 @@ import pathlib
 import numpy as np
 import torch
 from PIL import Image, ImageDraw
-from matplotlib import pyplot as plt
 from torch import nn
 
 import models_vit
@@ -18,16 +17,15 @@ ANNOTATIONS = r""
 
 X_OFFSET, Y_OFFSET = (496, 0)
 
-CLASS_NAMES = ["Atrophy", "Normal"]
+CLASS_NAMES = {2: ["Atrophy", "Normal"], 3: ["iORA + cORA", "iRORA + cRORA", "Normal"],
+               5: ["cORA", "cRORA", "iORA", "iRORA", "Normal"]}
 CLASS_COLORS = {"iORA": "green", "cORA": "blue", "iRORA": "yellow", "cRORA": "red", "unknown": "pink",
                 "multiple": "brown"}
 
 
-def prepare_ft_model(chkpt_dir, num_classes, input_size):
-    model = models_vit.__dict__["vit_large_patch16"](
+def prepare_ft_model(model_name, num_classes, input_size, chkpt_dir):
+    model = models_vit.__dict__[model_name](
         num_classes=num_classes,
-        drop_path_rate=0.1,
-        global_pool=True,
         img_size=input_size,
     )
 
@@ -60,17 +58,22 @@ def prepare_image(img_path, input_size):
     return x
 
 
-def run_classification(img_path, input_size, model):
-    x = prepare_image(img_path=img_path, input_size=input_size)
-
-    # model inferenceda
+def evaluate_class(x, model, img_path, num_classes):
     with torch.no_grad():
         output = model(x)
 
     output = nn.Softmax(dim=1)(output)
     output = output.squeeze(0).cpu().detach().numpy()
 
-    print(f"Results for {img_path}: {output} -> {CLASS_NAMES[np.argmax(output)]}")
+    print(f"Results for {img_path}: {output} -> {CLASS_NAMES[num_classes][np.argmax(output)]}")
+
+
+def evaluate_IC(x, model, img_path, num_classes):
+    with torch.no_grad():
+        interval_pred, class_pred = model(x)
+
+    print(f"Interval results for {img_path}: {interval_pred}")
+    print(f"Class results for {img_path}: {class_pred} -> {CLASS_NAMES[num_classes][np.argmax(class_pred)]}")
 
 
 def annotate_images(image_paths, annotations):
@@ -139,23 +142,26 @@ if __name__ == '__main__':
     # parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str)
-    parser.add_argument("--data_format", type=str, default="*")
     parser.add_argument("--input_size", type=int, default=224)
-    parser.add_argument("--mode", type=str, default="Classification", choices=["Classification", "ObjectDetection"])
+    parser.add_argument("--model", type=str, default="vit_large_patch16", choices=["vit_large_patch16", "IC_detector"])
     parser.add_argument("--num_classes", type=int, default=2)
     parser.add_argument("--resume", type=str)
 
     args = parser.parse_args()
 
     # chose fine-tuned model from 'checkpoint'
-    model = prepare_ft_model(chkpt_dir=args.resume, num_classes=args.num_classes, input_size=args.input_size)
+    model = prepare_ft_model(model_name=args.model, num_classes=args.num_classes, input_size=args.input_size,
+                             chkpt_dir=args.resume)
 
     # get all images
     # supports single files or folders
     data_path = args.data_path
     image_paths = [data_path] if os.path.isfile(data_path) else \
-        [str(path) for path in pathlib.Path(data_path).rglob(f"*.{args.data_format}")]
+        [str(path) for path in pathlib.Path(data_path).rglob(f"*.*")]
+
+    eval_fn = evaluate_IC if model == "IC_detector" else evaluate_class()
 
     # run classification for each image
     for img_path in image_paths:
-        run_classification(img_path=img_path, input_size=args.input_size, model=model)
+        x = prepare_image(img_path=img_path, input_size=args.input_size)
+        eval_fn(x=x, model=model, img_path=img_path, num_classes=args.num_classes)

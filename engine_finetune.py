@@ -133,10 +133,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
 
 @torch.no_grad()
-def evaluate(data_loader, model, device, epoch, mode, args):
-    task = args.task
-    num_classes = args.nb_classes
-
+def evaluate(data_loader, model, device, task, epoch, mode, num_class):
     criterion = torch.nn.CrossEntropyLoss()
 
     metric_logger = misc.MetricLogger(delimiter="  ")
@@ -158,7 +155,7 @@ def evaluate(data_loader, model, device, epoch, mode, args):
         target = batch[-1]
         images = images.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
-        true_label = F.one_hot(target.to(torch.int64), num_classes=num_classes)
+        true_label = F.one_hot(target.to(torch.int64), num_classes=num_class)
 
         # compute output
         with torch.cuda.amp.autocast():
@@ -182,7 +179,7 @@ def evaluate(data_loader, model, device, epoch, mode, args):
     true_label_decode_list = np.array(true_label_decode_list)
     prediction_decode_list = np.array(prediction_decode_list)
     confusion_matrix = multilabel_confusion_matrix(true_label_decode_list, prediction_decode_list,
-                                                   labels=[i for i in range(num_classes)])
+                                                   labels=[i for i in range(num_class)])
     acc, sensitivity, specificity, precision, G, F1, mcc = misc_measures(confusion_matrix)
 
     auc_roc = roc_auc_score(true_label_onehot_list, prediction_list, multi_class='ovr', average='macro')
@@ -210,12 +207,8 @@ def evaluate(data_loader, model, device, epoch, mode, args):
 
 
 @torch.no_grad()
-def evaluate_IC(data_loader, model, device, epoch, mode, args):
-    task = args.task
-    num_classes = args.nb_classes
-    max_intervals = args.max_intervals
-
-    criterion = ICLoss(num_classes)
+def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
+    criterion = ICLoss(num_class)
 
     metric_logger = misc.MetricLogger(delimiter="  ")
     header = 'Test:'
@@ -236,24 +229,17 @@ def evaluate_IC(data_loader, model, device, epoch, mode, args):
         target = batch[-1]
         images = images.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
-        true_label = F.one_hot(target.to(torch.int64), num_classes=num_classes)
+        interval_target, class_target = target[..., :2], target[..., 2].flatten().to(torch.int64)
+        true_label = F.one_hot(class_target, num_classes=num_class)
 
         # compute output
         with torch.cuda.amp.autocast():
             interval_pred, class_pred = model(images)
-            interval_target, class_target = target[..., :2], target[..., 2]
             loss = criterion((interval_pred, class_pred), target)
+            class_pred = class_pred.reshape(-1, num_class)
 
-            # class_pred_softmax = nn.Softmax(dim=2)(class_pred)  # (batch, max_intervals, num_classes)
-            # class_pred_decoded = torch.argmax(class_pred_softmax, dim=2)  # (batch, max_intervals)
-
-            # interval_prediction_list.extend(interval_pred.cpu().detach().numpy())
-            # class_prediction_list.extend(class_pred_softmax.cpu().detach().numpy())
-            # true_interval_list.extend(interval_target.cpu().detach().numpy())
-            # true_class_list.extend(class_target.cpu().detach().numpy())
-
-            prediction_softmax = nn.Softmax(dim=2)(class_pred)
-            _, prediction_decode = torch.max(prediction_softmax, 2)
+            prediction_softmax = nn.Softmax(dim=1)(class_pred)
+            _, prediction_decode = torch.max(prediction_softmax, 1)
             _, true_label_decode = torch.max(true_label, 1)
 
             prediction_decode_list.extend(prediction_decode.cpu().detach().numpy())
@@ -261,10 +247,7 @@ def evaluate_IC(data_loader, model, device, epoch, mode, args):
             true_label_onehot_list.extend(true_label.cpu().detach().numpy())
             prediction_list.extend(prediction_softmax.cpu().detach().numpy())
 
-        print(class_pred)
-        print(target)
-        acc1, _ = accuracy(class_pred, target, topk=(1, 2))
-        # acc1, _ = accuracy(class_pred.reshape(-1, num_classes), class_target.flatten(), topk=(1, 2))
+        acc1, _ = accuracy(class_pred, class_target, topk=(1, 2))
 
         batch_size = images.shape[0]
         metric_logger.update(loss=loss.item())
@@ -273,7 +256,7 @@ def evaluate_IC(data_loader, model, device, epoch, mode, args):
     true_label_decode_list = np.array(true_label_decode_list)
     prediction_decode_list = np.array(prediction_decode_list)
     confusion_matrix = multilabel_confusion_matrix(true_label_decode_list, prediction_decode_list,
-                                                   labels=[i for i in range(num_classes)])
+                                                   labels=[i for i in range(num_class)])
     acc, sensitivity, specificity, precision, G, F1, mcc = misc_measures(confusion_matrix)
 
     auc_roc = roc_auc_score(true_label_onehot_list, prediction_list, multi_class='ovr', average='macro')
