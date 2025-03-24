@@ -349,8 +349,8 @@ def main(args):
             args=args
         )
 
-        val_stats, val_auc_roc = eval_fn(data_loader_val, model, device, epoch, mode='val',
-                                         args=args)
+        val_stats, val_auc_roc = eval_fn(data_loader_test, model, device, args.task, epoch=0, mode='test',
+                                         num_class=args.nb_classes)
         if max_auc < val_auc_roc:
             max_auc = val_auc_roc
 
