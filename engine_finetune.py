@@ -221,6 +221,9 @@ def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
     true_label_decode_list = []
     true_label_onehot_list = []
 
+    true_interval_list = []
+    prediction_interval_list = []
+
     # switch to evaluation mode
     model.eval()
 
@@ -247,6 +250,9 @@ def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
             true_label_onehot_list.extend(true_label.cpu().detach().numpy())
             prediction_list.extend(prediction_softmax.cpu().detach().numpy())
 
+            true_interval_list.extend(interval_target.reshape(-1, 2).cpu().detach().numpy())
+            prediction_interval_list.extend(interval_pred.reshape(-1, 2).cpu().detach().numpy())
+
         acc1, _ = accuracy(class_pred, class_target, topk=(1, 2))
 
         batch_size = images.shape[0]
@@ -260,6 +266,7 @@ def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
     acc, sensitivity, specificity, precision, G, F1, mcc = misc_measures(confusion_matrix)
 
     auc_roc = roc_auc_score(true_label_onehot_list, prediction_list, multi_class='ovr', average='macro')
+    test = iou_interval(true_interval_list, prediction_interval_list)
     auc_pr = average_precision_score(true_label_onehot_list, prediction_list, average='macro')
 
     metric_logger.synchronize_between_processes()
@@ -268,6 +275,8 @@ def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
         'Sklearn Metrics - Acc: {:.4f} AUC-roc: {:.4f} AUC-pr: {:.4f} F1-score: {:.4f} MCC: {:.4f}'.format(acc, auc_roc,
                                                                                                            auc_pr, F1,
                                                                                                            mcc))
+    print(f'Interval AUC-roc: {test}')
+
     results_path = task + '_metrics_{}.csv'.format(mode)
     with open(results_path, mode='a', newline='', encoding='utf8') as cfa:
         wf = csv.writer(cfa)
@@ -280,4 +289,16 @@ def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
         cm.plot(cmap=plt.cm.Blues, number_label=True, normalized=True, plot_lib="matplotlib")
         plt.savefig(task + 'confusion_matrix_test.jpg', dpi=600, bbox_inches='tight')
 
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, auc_roc
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, auc_roc + test
+
+
+def iou_interval(true_intervals, pred_intervals):
+    iou_scores = []
+
+    for (x0_true, x1_true), (x0_pred, x1_pred) in zip(true_intervals, pred_intervals):
+        intersection = max(0, min(x1_true, x1_pred) - max(x0_true, x0_pred))
+        union = max(x1_true, x1_pred) - min(x0_true, x0_pred)
+        iou = intersection / union if union > 0 else 0
+        iou_scores.append(iou)
+
+    return np.mean(iou_scores)
