@@ -23,11 +23,12 @@ def load_annotations(annotations):
     return etree.parse(annotations).getroot()
 
 
-def get_targets(images, annotations, num_classes):
+def get_targets(images, annotations, num_classes, x_offset):
     result = {}
 
     for path, name in images:
-        result[name] = get_class_intervals(image=name, annotations=annotations, num_classes=num_classes)
+        class_intervals = get_class_intervals(image=name, annotations=annotations, num_classes=num_classes)
+        result[name] = [[max(x0 - x_offset, 0), max(x1 - x_offset, 0), cls] for x0, x1, cls in class_intervals]
 
     return result
 
@@ -76,12 +77,13 @@ if __name__ == "__main__":
     parser.add_argument("--data_path", type=str)
     parser.add_argument("--annotations", type=str)
     parser.add_argument("--num_classes", type=int, default=2)
+    parser.add_argument("--x_offset", type=tuple, default=496)
     parser.add_argument("--output_path", type=str, default="annotations.json")
     args = parser.parse_args()
 
     images = load_images(args.data_path)
     annotations = load_annotations(args.annotations)
-    targets = get_targets(images=images, annotations=annotations, num_classes=args.num_classes)
+    targets = get_targets(images=images, annotations=annotations, num_classes=args.num_classes, x_offset=args.x_offset)
 
     with open(args.output_path, "w") as f:
         json.dump(targets, f, indent=4)

@@ -8,14 +8,10 @@ from PIL import Image, ImageDraw
 from torch import nn
 
 import models_vit
-from annotations import combine_intervals, get_targets, get_class_intervals
+from annotations import get_class_intervals
 
 imagenet_mean = np.array([0.485, 0.456, 0.406])
 imagenet_std = np.array([0.229, 0.224, 0.225])
-
-ANNOTATIONS = r""
-
-X_OFFSET, Y_OFFSET = (496, 0)
 
 CLASS_NAMES = {2: ["Atrophy", "Normal"], 3: ["iORA + cORA", "iRORA + cRORA", "Normal"],
                5: ["cORA", "cRORA", "iORA", "iRORA", "Normal"]}
@@ -93,7 +89,7 @@ def draw_results(image_path, results, num_classes, tag):
 
     for i, (x0, x1, cls) in enumerate(results):
         # draw bbox
-        draw.rectangle(xy=((max(x0 - X_OFFSET, 0), 0), (min(x1 - X_OFFSET, image.width - 1), image.height - 1)),
+        draw.rectangle(xy=((max(x0, 0), 0), (min(x1, image.width - 1), image.height - 1)),
                        outline=CLASS_COLORS[num_classes][cls])
 
         # save annotated image
