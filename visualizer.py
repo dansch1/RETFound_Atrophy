@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 from torch import nn
 
 import models_vit
-from annotations import combine_intervals
+from annotations import combine_intervals, get_targets, get_class_intervals
 
 imagenet_mean = np.array([0.485, 0.456, 0.406])
 imagenet_std = np.array([0.229, 0.224, 0.225])
@@ -19,14 +19,18 @@ X_OFFSET, Y_OFFSET = (496, 0)
 
 CLASS_NAMES = {2: ["Atrophy", "Normal"], 3: ["iORA + cORA", "iRORA + cRORA", "Normal"],
                5: ["cORA", "cRORA", "iORA", "iRORA", "Normal"]}
-CLASS_COLORS = {"iORA": "green", "cORA": "blue", "iRORA": "yellow", "cRORA": "red", "unknown": "pink",
-                "multiple": "brown"}
+
+CLASS_COLORS = {2: {0: "white", 1: "red"},  # 1 class: (0.Normal), 1.atrophy
+                3: {0: "white", 1: "green", 2: "red"},  # 2 classes: 1.iORA+cORA, 2.iRORA+cRORA
+                5: {0: "white", 1: "green", 2: "blue", 3: "yellow",
+                    4: "red"}}  # 4 classes: 1.iORA, 2.cORA, 3.iRORA, 4.cRORA
 
 
-def prepare_ft_model(model_name, num_classes, input_size, chkpt_dir):
+def prepare_model(model_name, num_classes, input_size, chkpt_dir, kwargs):
     model = models_vit.__dict__[model_name](
         num_classes=num_classes,
         img_size=input_size,
+        **kwargs
     )
 
     checkpoint = torch.load(chkpt_dir, map_location="cpu")
@@ -58,7 +62,7 @@ def prepare_image(img_path, input_size):
     return x
 
 
-def evaluate_class(x, model, img_path, num_classes):
+def evaluate_class(x, model, img_path, num_classes, annotations):
     with torch.no_grad():
         output = model(x)
 
@@ -68,73 +72,32 @@ def evaluate_class(x, model, img_path, num_classes):
     print(f"Results for {img_path}: {output} -> {CLASS_NAMES[num_classes][np.argmax(output)]}")
 
 
-def evaluate_IC(x, model, img_path, num_classes):
+def evaluate_IC(x, model, img_path, num_classes, annotations):
     with torch.no_grad():
         interval_pred, class_pred = model(x)
 
     print(f"Interval results for {img_path}: {interval_pred}")
     print(f"Class results for {img_path}: {class_pred} -> {CLASS_NAMES[num_classes][np.argmax(class_pred)]}")
 
+    target = get_class_intervals(image=img_path, annotations=annotations, num_classes=num_classes)
+    draw_results(image_path=img_path, results=target, num_classes=num_classes, tag="target")
 
-def annotate_images(image_paths, annotations):
-    for filename in image_paths:
-        basename = os.path.basename(filename)
-        bboxes = annotations.findall(f"image[@name='{basename}']/box")
-
-        intervals = []
-
-        # get intervals from bboxes
-        for bbox in bboxes:
-            # get start and end point
-            x0, x1 = float(bbox.get("xtl")), float(bbox.get("xbr"))
-            intervals.append([x0, x1])
-
-        intervals = combine_intervals(intervals)
-        draw_intervals(filename=filename, intervals=intervals, colors="red", tag="annotated")
+    draw_results(image_path=img_path, results=zip(interval_pred, class_pred), num_classes=num_classes, tag="prediction")
 
 
-def multi_annotate_images(image_paths, annotations):
-    for filename in image_paths:
-        basename = os.path.basename(filename)
-        bboxes = annotations.findall(f"image[@name='{basename}']/box")
+def draw_results(image_path, results, num_classes, tag):
+    path = os.path.dirname(image_path)
 
-        intervals = []
-        colors = []
-
-        for bbox in bboxes:
-            # get start and end point
-            x0, x1 = float(bbox.get("xtl")), float(bbox.get("xbr"))
-
-            # get color
-            cls = [attribute.get("name") for attribute in bbox.findall("attribute") if attribute.text == "true"]
-
-            if len(cls) == 0:
-                print(f"Bounding box of {filename} has no class assigned")
-                cls = ["unknown"]
-
-            if len(cls) > 1:
-                print(f"Bounding box of {filename} has multiple classes")
-                cls = ["multiple"]
-
-            intervals.append([x0, x1])
-            colors.append(CLASS_COLORS[cls[0]])
-
-        draw_intervals(filename=filename, intervals=intervals, colors=colors, tag="multi_annotated")
-
-
-def draw_intervals(filename, intervals, colors, tag):
-    path = os.path.dirname(filename)
-
-    image = Image.open(filename)
+    image = Image.open(image_path)
     draw = ImageDraw.Draw(image)
 
-    for i, (x0, x1) in enumerate(intervals):
+    for i, (x0, x1, cls) in enumerate(results):
         # draw bbox
         draw.rectangle(xy=((max(x0 - X_OFFSET, 0), 0), (min(x1 - X_OFFSET, image.width - 1), image.height - 1)),
-                       outline=colors if type(colors) is str else colors[i])
+                       outline=CLASS_COLORS[num_classes][cls])
 
         # save annotated image
-        name, extension = os.path.splitext(filename)
+        name, extension = os.path.splitext(image_path)
         image.save(os.path.join(path, f"{name}_{tag}{extension}"))
 
 
@@ -146,12 +109,15 @@ if __name__ == '__main__':
     parser.add_argument("--model", type=str, default="vit_large_patch16", choices=["vit_large_patch16", "IC_detector"])
     parser.add_argument("--num_classes", type=int, default=2)
     parser.add_argument("--resume", type=str)
+    parser.add_argument("--annotations", type=str)
+    parser.add_argument("--max_intervals", type=int, default=10)
 
     args = parser.parse_args()
 
     # chose fine-tuned model from 'checkpoint'
-    model = prepare_ft_model(model_name=args.model, num_classes=args.num_classes, input_size=args.input_size,
-                             chkpt_dir=args.resume)
+    kwargs = {"max_intervals": args.max_intervals} if args.model == "IC_detector" else {}
+    model = prepare_model(model_name=args.model, num_classes=args.num_classes, input_size=args.input_size,
+                          chkpt_dir=args.resume, **kwargs)
 
     # get all images
     # supports single files or folders
@@ -159,9 +125,9 @@ if __name__ == '__main__':
     image_paths = [data_path] if os.path.isfile(data_path) else \
         [str(path) for path in pathlib.Path(data_path).rglob(f"*.*")]
 
-    eval_fn = evaluate_IC if model == "IC_detector" else evaluate_class()
+    eval_fn = evaluate_IC if model == "IC_detector" else evaluate_class
 
     # run classification for each image
     for img_path in image_paths:
         x = prepare_image(img_path=img_path, input_size=args.input_size)
-        eval_fn(x=x, model=model, img_path=img_path, num_classes=args.num_classes)
+        eval_fn(x=x, model=model, img_path=img_path, num_classes=args.num_classes, annotations=args.annotations)

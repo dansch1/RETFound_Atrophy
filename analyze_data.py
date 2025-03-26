@@ -1,11 +1,10 @@
 import xmltodict
 from functools import reduce
+import argparse
 
-ANNOTATIONS = r""
 
-
-def training_data_info():
-    with open(ANNOTATIONS, "r") as file:
+def training_data_info(annotations):
+    with open(annotations, "r") as file:
         data = file.read()
 
     images = xmltodict.parse(data)["annotations"]["image"]
@@ -53,4 +52,8 @@ def training_data_info():
 
 
 if __name__ == "__main__":
-    training_data_info()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--annotations", type=str)
+    args = parser.parse_args()
+
+    training_data_info(args.annotations)

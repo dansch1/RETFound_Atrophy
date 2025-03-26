@@ -2,50 +2,50 @@ import json
 import os
 
 from lxml import etree
+import argparse
 
-FILE_PATH = r"C:\Users\d_schr33\Desktop\Unterlagen\Promotion\Data\train_data"
-ANNOTATIONS = r"C:\Users\d_schr33\Desktop\Unterlagen\Promotion\Data\cam 2.0\annotations.xml"
-OUTPUT_FILE = r"annotations.json"
-
-# CLASS_TO_IDX = {"iORA": 1, "cORA": 1, "iRORA": 1, "cRORA": 1}  # 1 class: 1 - atrophy
-CLASS_TO_IDX = {"iORA": 1, "cORA": 1, "iRORA": 2, "cRORA": 2}  # 2 classes: 1 - iORA + cORA, 2 - iRORA + cRORA
+CLASS_REDUCTION = {2: {"iORA": 1, "cORA": 1, "iRORA": 1, "cRORA": 1},  # 1 class: (0.Normal), 1.atrophy
+                   3: {"iORA": 1, "cORA": 1, "iRORA": 2, "cRORA": 2},  # 2 classes: 1.iORA+cORA, 2.iRORA+cRORA
+                   5: {"iORA": 1, "cORA": 2, "iRORA": 3, "cRORA": 4}}  # 4 classes: 1.iORA, 2.cORA, 3.iRORA, 4.cRORA
 
 
-# CLASS_TO_IDX = {"iORA": 1, "cORA": 2, "iRORA": 3, "cRORA": 4}  # 4 classes: 1 - iORA, 2 - cORA, 3 - iRORA, 4 - cRORA
-
-
-def load_images():
+def load_images(data_path):
     result = []
 
-    for path, subdirs, files in os.walk(FILE_PATH):
+    for path, subdirs, files in os.walk(data_path):
         for name in files:
             result.append((path, name))
 
     return result
 
 
-def load_annotations():
-    return etree.parse(ANNOTATIONS).getroot()
+def load_annotations(annotations):
+    return etree.parse(annotations).getroot()
 
 
-def get_targets(images, annotations):
+def get_targets(images, annotations, num_classes):
     result = {}
 
     for path, name in images:
-        bboxes = annotations.findall(f"image[@name='{name}']/box")
-        intervals = []
-
-        for bbox in bboxes:
-            # get start and end point
-            x0, x1 = float(bbox.get("xtl")), float(bbox.get("xbr"))
-            cls = [attribute.get("name") for attribute in bbox.findall("attribute") if attribute.text == "true"]
-
-            if len(cls) == 1:
-                intervals.append([x0, x1, CLASS_TO_IDX[cls[0]]])
-
-        result[name] = combine_intervals(intervals)
+        result[name] = get_class_intervals(image=name, annotations=annotations, num_classes=num_classes)
 
     return result
+
+
+def get_class_intervals(image, annotations, num_classes):
+    bboxes = annotations.findall(f"image[@name='{image}']/box")
+    intervals = []
+
+    for bbox in bboxes:
+        # get start and end point
+        x0, x1 = float(bbox.get("xtl")), float(bbox.get("xbr"))
+        cls = [attribute.get("name") for attribute in bbox.findall("attribute") if attribute.text == "true"]
+
+        if len(cls) == 1:
+            cls = CLASS_REDUCTION[num_classes][cls[0]]
+            intervals.append([x0, x1, cls])
+
+    return combine_intervals(intervals)
 
 
 def combine_intervals(intervals):
@@ -72,9 +72,16 @@ def combine_intervals(intervals):
 
 
 if __name__ == "__main__":
-    images = load_images()
-    annotations = load_annotations()
-    targets = get_targets(images, annotations)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_path", type=str)
+    parser.add_argument("--annotations", type=str)
+    parser.add_argument("--num_classes", type=int, default=2)
+    parser.add_argument("--output_path", type=str, default="annotations.json")
+    args = parser.parse_args()
 
-    with open(OUTPUT_FILE, "w") as f:
+    images = load_images(args.data_path)
+    annotations = load_annotations(args.annotations)
+    targets = get_targets(images=images, annotations=annotations, num_classes=args.num_classes)
+
+    with open(args.output_path, "w") as f:
         json.dump(targets, f, indent=4)

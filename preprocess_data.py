@@ -1,58 +1,64 @@
 import os
 
 from PIL import Image
-
-ORG_PATH = r""
-NEW_PATH = r""
-
-ORG_X, ORG_Y = (496, 0)
-ORG_WIDTH, ORG_HEIGHT = (512, 512)
-
-NEW_WIDTH, NEW_HEIGHT = (512, 512)
-NEW_FORMAT = "png"
+import argparse
 
 
-def load_images():
+def load_images(org_path):
     result = []
 
-    for path, subdirs, files in os.walk(ORG_PATH):
+    for path, subdirs, files in os.walk(org_path):
         for name in files:
             result.append((path, name, Image.open(os.path.join(path, name))))
 
     return result
 
 
-def crop_images(images):
+def crop_images(images, offset, org_size):
     result = []
 
+    x_offset, y_offset = offset
+    width, height = org_size
+
     for path, name, image in images:
-        result.append((path, name, image.crop((ORG_X, ORG_Y, ORG_X + ORG_WIDTH, ORG_Y + ORG_HEIGHT))))
+        result.append((path, name, image.crop((x_offset, y_offset, x_offset + width, y_offset + height))))
 
     return result
 
 
-def resize_images(images):
+def resize_images(images, new_size):
     result = []
 
+    width, height = new_size
+
     for path, name, image in images:
-        result.append((path, name, image.resize((NEW_WIDTH, NEW_HEIGHT), Image.Resampling.LANCZOS)))
+        result.append((path, name, image.resize((width, height), Image.LANCZOS)))
 
     return result
 
 
-def save_images(images):
+def save_images(images, org_path, new_path, format):
     for path, name, image in images:
-        new_path = path.replace(ORG_PATH, NEW_PATH)
+        save_path = path.replace(org_path, new_path)
 
-        if not os.path.exists(new_path):
-            os.makedirs(new_path)
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
 
-        new_name = f"{os.path.splitext(name)[0]}.{NEW_FORMAT}"
-        image.save(os.path.join(new_path, new_name))
+        save_name = f"{os.path.splitext(name)[0]}.{format}"
+        image.save(os.path.join(save_path, save_name))
 
 
 if __name__ == "__main__":
-    org_images = load_images()
-    # cropped_images = crop_images(org_images)
-    resized_images = resize_images(org_images)
-    save_images(resized_images)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--org_path", type=str)
+    parser.add_argument("--new_path", type=str)
+    parser.add_argument("--format", type=str, default="png")
+    parser.add_argument("--org_size", type=tuple, default=(512, 512))
+    parser.add_argument("--new_size", type=tuple, default=(512, 512))
+    parser.add_argument("--offset", type=tuple, default=(496, 0))
+    args = parser.parse_args()
+
+    org_images = load_images(args.org_path)
+    cropped_images = crop_images(images=org_images, offset=args.offset, org_size=args.org_size)
+    resized_images = resize_images(images=cropped_images, new_size=args.new_size)
+    save_images(images=resized_images, org_path=args.org_path, new_path=args.new_path, format=args.format)
