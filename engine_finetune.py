@@ -16,7 +16,7 @@ from typing import Iterable, Optional
 import util.misc as misc
 import util.lr_sched as lr_sched
 from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, average_precision_score, \
-    multilabel_confusion_matrix
+    multilabel_confusion_matrix, mean_absolute_error
 from pycm import *
 import matplotlib.pyplot as plt
 import numpy as np
@@ -266,7 +266,7 @@ def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
     acc, sensitivity, specificity, precision, G, F1, mcc = misc_measures(confusion_matrix)
 
     auc_roc = roc_auc_score(true_label_onehot_list, prediction_list, multi_class='ovr', average='macro')
-    test = iou_interval(true_interval_list, prediction_interval_list)
+    test = MAE_interval(true_interval_list, prediction_interval_list)
     auc_pr = average_precision_score(true_label_onehot_list, prediction_list, average='macro')
 
     metric_logger.synchronize_between_processes()
@@ -292,13 +292,20 @@ def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, auc_roc + test
 
 
-def iou_interval(true_intervals, pred_intervals):
+def iou_interval(true_interval_list, prediction_interval_list):
     iou_scores = []
 
-    for (x0_true, x1_true), (x0_pred, x1_pred) in zip(true_intervals, pred_intervals):
+    for (x0_true, x1_true), (x0_pred, x1_pred) in zip(true_interval_list, prediction_interval_list):
         intersection = max(0, min(x1_true, x1_pred) - max(x0_true, x0_pred))
         union = max(x1_true, x1_pred) - min(x0_true, x0_pred)
         iou = intersection / union if union > 0 else 0
         iou_scores.append(iou)
 
     return np.mean(iou_scores)
+
+
+def MAE_interval(true_interval_list, prediction_interval_list):
+    mae_x0 = mean_absolute_error(true_interval_list[:, 0], prediction_interval_list[:, 0])
+    mae_x1 = mean_absolute_error(true_interval_list[:, 1], prediction_interval_list[:, 1])
+
+    return (mae_x0 + mae_x1) / 2

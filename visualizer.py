@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 from torch import nn
 
 import models_vit
-from annotations import get_class_intervals
+from annotations import get_class_intervals, load_annotations
 
 imagenet_mean = np.array([0.485, 0.456, 0.406])
 imagenet_std = np.array([0.229, 0.224, 0.225])
@@ -26,7 +26,6 @@ def prepare_model(model_name, num_classes, input_size, chkpt_dir, kwargs):
     model = models_vit.__dict__[model_name](
         num_classes=num_classes,
         img_size=input_size,
-        **kwargs
     )
 
     checkpoint = torch.load(chkpt_dir, map_location="cpu")
@@ -71,9 +70,13 @@ def evaluate_class(x, model, img_path, num_classes, annotations):
 def evaluate_IC(x, model, img_path, num_classes, annotations):
     with torch.no_grad():
         interval_pred, class_pred = model(x)
+        interval_pred = interval_pred.reshape(-1, 2)
+        class_pred = class_pred.reshape(-1, num_classes)
+        class_pred = nn.Softmax(dim=1)(class_pred)
+        class_pred = torch.max(class_pred, 1)
 
     print(f"Interval results for {img_path}: {interval_pred}")
-    print(f"Class results for {img_path}: {class_pred} -> {CLASS_NAMES[num_classes][np.argmax(class_pred)]}")
+    print(f"Class results for {img_path}: {class_pred}")
 
     target = get_class_intervals(image=img_path, annotations=annotations, num_classes=num_classes)
     draw_results(image_path=img_path, results=target, num_classes=num_classes, tag="target")
@@ -110,10 +113,13 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    model_name = args.model
+    annotations = load_annotations(args.annotations)
+
     # chose fine-tuned model from 'checkpoint'
-    kwargs = {"max_intervals": args.max_intervals} if args.model == "IC_detector" else {}
-    model = prepare_model(model_name=args.model, num_classes=args.num_classes, input_size=args.input_size,
-                          chkpt_dir=args.resume, **kwargs)
+    kwargs = {"max_intervals": args.max_intervals} if model_name == "IC_detector" else {}
+    model = prepare_model(model_name=model_name, num_classes=args.num_classes, input_size=args.input_size,
+                          chkpt_dir=args.resume, kwargs=kwargs)
 
     # get all images
     # supports single files or folders
@@ -121,9 +127,9 @@ if __name__ == '__main__':
     image_paths = [data_path] if os.path.isfile(data_path) else \
         [str(path) for path in pathlib.Path(data_path).rglob(f"*.*")]
 
-    eval_fn = evaluate_IC if model == "IC_detector" else evaluate_class
+    eval_fn = evaluate_IC if model_name == "IC_detector" else evaluate_class
 
     # run classification for each image
     for img_path in image_paths:
         x = prepare_image(img_path=img_path, input_size=args.input_size)
-        eval_fn(x=x, model=model, img_path=img_path, num_classes=args.num_classes, annotations=args.annotations)
+        eval_fn(x=x, model=model, img_path=img_path, num_classes=args.num_classes, annotations=annotations)
