@@ -12,7 +12,6 @@ from torchvision import datasets, transforms
 from timm.data import create_transform
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from torch.utils.data import Dataset
-import pandas as pd
 
 
 def build_dataset(is_train, args):
