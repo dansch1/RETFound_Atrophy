@@ -93,7 +93,7 @@ def draw_results(image_path, results, num_classes, tag):
     for i, (x0, x1, cls) in enumerate(results):
         # draw bbox
         draw.rectangle(xy=((max(x0, 0), 0), (min(x1, image.width - 1), image.height - 1)),
-                       outline=CLASS_COLORS[num_classes][cls])
+                       outline=CLASS_COLORS[num_classes][cls], width=4)
 
         # save annotated image
         name, extension = os.path.splitext(image_path)

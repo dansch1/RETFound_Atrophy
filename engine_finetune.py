@@ -266,7 +266,7 @@ def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
     acc, sensitivity, specificity, precision, G, F1, mcc = misc_measures(confusion_matrix)
 
     auc_roc = roc_auc_score(true_label_onehot_list, prediction_list, multi_class='ovr', average='macro')
-    test = MAE_interval(true_interval_list, prediction_interval_list)
+    test = iou_interval(true_interval_list, prediction_interval_list)
     auc_pr = average_precision_score(true_label_onehot_list, prediction_list, average='macro')
 
     metric_logger.synchronize_between_processes()
@@ -275,7 +275,7 @@ def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
         'Sklearn Metrics - Acc: {:.4f} AUC-roc: {:.4f} AUC-pr: {:.4f} F1-score: {:.4f} MCC: {:.4f}'.format(acc, auc_roc,
                                                                                                            auc_pr, F1,
                                                                                                            mcc))
-    print(f'Interval AUC-roc: {test}')
+    print(f'Interval IoU: {test}')
 
     results_path = task + '_metrics_{}.csv'.format(mode)
     with open(results_path, mode='a', newline='', encoding='utf8') as cfa:
@@ -305,7 +305,10 @@ def iou_interval(true_interval_list, prediction_interval_list):
 
 
 def MAE_interval(true_interval_list, prediction_interval_list):
-    mae_x0 = mean_absolute_error(true_interval_list[:, 0], prediction_interval_list[:, 0])
-    mae_x1 = mean_absolute_error(true_interval_list[:, 1], prediction_interval_list[:, 1])
+    true_interval_array = np.array(true_interval_list)
+    prediction_interval_array = np.array(prediction_interval_list)
+
+    mae_x0 = mean_absolute_error(true_interval_array[:, 0], prediction_interval_array[:, 0])
+    mae_x1 = mean_absolute_error(true_interval_array[:, 1], prediction_interval_array[:, 1])
 
     return (mae_x0 + mae_x1) / 2
