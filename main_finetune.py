@@ -21,7 +21,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import timm
 
-from loss import ICLoss
+from loss import ICLoss, ILoss
 
 assert timm.__version__ == "0.3.2"  # version check
 from timm.models.layers import trunc_normal_
@@ -36,7 +36,7 @@ from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
 import models_vit
 
-from engine_finetune import train_one_epoch, evaluate, evaluate_IC
+from engine_finetune import train_one_epoch, evaluate, evaluate_IC, evaluate_I
 
 
 def get_args_parser():
@@ -175,7 +175,12 @@ def main(args):
 
     cudnn.benchmark = True
 
-    dataset_builder = build_IC_dataset if args.model == "IC_detector" else build_dataset
+    if args.model == "I_detector" or args.model == "IC_detector":
+        dataset_builder = build_IC_dataset
+    elif args.model == "vit_large_patch16":
+        dataset_builder = build_dataset
+    else:
+        dataset_builder = build_dataset
 
     dataset_train = dataset_builder(is_train='train', args=args)
     dataset_val = dataset_builder(is_train='val', args=args)
@@ -313,7 +318,9 @@ def main(args):
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
     loss_scaler = NativeScaler()
 
-    if args.model == "IC_detector":
+    if args.model == "I_detector":
+        criterion = ILoss()
+    elif args.model == "IC_detector":
         criterion = ICLoss(args.nb_classes)
     elif mixup_fn is not None:
         # smoothing is handled with mixup label transform
@@ -327,7 +334,14 @@ def main(args):
 
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
-    eval_fn = evaluate_IC if args.model == "IC_detector" else evaluate
+    if args.model == "I_detector":
+        eval_fn = evaluate_I
+    elif args.model == "IC_detector":
+        eval_fn = evaluate_IC
+    elif args.model == "vit_large_patch16":
+        eval_fn = evaluate
+    else:
+        eval_fn = evaluate
 
     if args.eval:
         test_stats, auc_roc = eval_fn(data_loader_test, model, device, args.task, epoch=0, mode='test',

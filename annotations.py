@@ -42,9 +42,12 @@ def get_class_intervals(image, annotations, num_classes):
         x0, x1 = float(bbox.get("xtl")), float(bbox.get("xbr"))
         cls = [attribute.get("name") for attribute in bbox.findall("attribute") if attribute.text == "true"]
 
-        if len(cls) == 1:
-            cls = CLASS_REDUCTION[num_classes][cls[0]]
-            intervals.append([x0, x1, cls])
+        if len(cls) != 1:
+            print(f"Found illegal annotations for image {image}")
+            continue
+
+        cls = CLASS_REDUCTION[num_classes][cls[0]]
+        intervals.append([x0, x1, cls])
 
     return combine_intervals(intervals)
 

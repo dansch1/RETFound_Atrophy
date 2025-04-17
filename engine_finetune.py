@@ -207,6 +207,51 @@ def evaluate(data_loader, model, device, task, epoch, mode, num_class):
 
 
 @torch.no_grad()
+def evaluate_I(data_loader, model, device, task, epoch, mode, num_class):
+    criterion = ICLoss(num_class)
+
+    metric_logger = misc.MetricLogger(delimiter="  ")
+    header = 'Test:'
+
+    if not os.path.exists(task):
+        os.makedirs(task)
+
+    true_interval_list = []
+    prediction_interval_list = []
+
+    # switch to evaluation mode
+    model.eval()
+
+    for batch in metric_logger.log_every(data_loader, 10, header):
+        images = batch[0]
+        target = batch[-1]
+        images = images.to(device, non_blocking=True)
+        target = target.to(device, non_blocking=True)
+
+        # compute output
+        with torch.cuda.amp.autocast():
+            output = model(images)
+            loss = criterion(output, target)
+
+            true_interval_list.extend(output.reshape(-1, 2).cpu().detach().numpy())
+            prediction_interval_list.extend(target.reshape(-1, 2).cpu().detach().numpy())
+
+        # acc1, _ = accuracy(class_pred, class_target, topk=(1, 2))
+
+        # batch_size = images.shape[0]
+        metric_logger.update(loss=loss.item())
+        # metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
+    # gather the stats from all processes
+    iou = iou_interval(true_interval_list, prediction_interval_list)
+
+    metric_logger.synchronize_between_processes()
+
+    print(f'Interval IoU: {iou}')
+
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, iou
+
+
+@torch.no_grad()
 def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
     criterion = ICLoss(num_class)
 
@@ -266,7 +311,7 @@ def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
     acc, sensitivity, specificity, precision, G, F1, mcc = misc_measures(confusion_matrix)
 
     auc_roc = roc_auc_score(true_label_onehot_list, prediction_list, multi_class='ovr', average='macro')
-    test = iou_interval(true_interval_list, prediction_interval_list)
+    iou = iou_interval(true_interval_list, prediction_interval_list)
     auc_pr = average_precision_score(true_label_onehot_list, prediction_list, average='macro')
 
     metric_logger.synchronize_between_processes()
@@ -275,7 +320,7 @@ def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
         'Sklearn Metrics - Acc: {:.4f} AUC-roc: {:.4f} AUC-pr: {:.4f} F1-score: {:.4f} MCC: {:.4f}'.format(acc, auc_roc,
                                                                                                            auc_pr, F1,
                                                                                                            mcc))
-    print(f'Interval IoU: {test}')
+    print(f'Interval IoU: {iou}')
 
     results_path = task + '_metrics_{}.csv'.format(mode)
     with open(results_path, mode='a', newline='', encoding='utf8') as cfa:
@@ -289,7 +334,7 @@ def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
         cm.plot(cmap=plt.cm.Blues, number_label=True, normalized=True, plot_lib="matplotlib")
         plt.savefig(task + 'confusion_matrix_test.jpg', dpi=600, bbox_inches='tight')
 
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, auc_roc + test
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, auc_roc + iou
 
 
 def iou_interval(true_interval_list, prediction_interval_list):

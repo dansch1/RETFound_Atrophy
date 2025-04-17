@@ -48,7 +48,23 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
         return outcome
 
 
-class IntervalDetector(VisionTransformer):
+class IDetector(VisionTransformer):
+    def __init__(self, max_intervals, **kwargs):
+        super().__init__(**kwargs)
+
+        self.max_intervals = max_intervals
+        self.head = nn.Linear(self.embed_dim, 2 * max_intervals)  # (x0, x1) for each interval
+
+    def forward(self, x):
+        x = self.forward_features(x)
+
+        interval_preds = self.head(x)
+        interval_preds = interval_preds.view(-1, self.max_intervals, 2)
+
+        return interval_preds
+
+
+class ICDetector(VisionTransformer):
     def __init__(self, max_intervals, **kwargs):
         super().__init__(**kwargs)
 
@@ -74,7 +90,13 @@ def vit_large_patch16(**kwargs):
     return model
 
 
+def I_detector(**kwargs):
+    model = IDetector(max_intervals=10, patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4,
+                      qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    return model
+
+
 def IC_detector(**kwargs):
-    model = IntervalDetector(max_intervals=10, patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4,
-                             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model = ICDetector(max_intervals=10, patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4,
+                       qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model
