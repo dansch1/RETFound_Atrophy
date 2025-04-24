@@ -6,7 +6,6 @@
 import argparse
 import datetime
 import json
-import shutil
 
 import numpy as np
 import os
@@ -15,26 +14,23 @@ from pathlib import Path
 
 import torch
 import torch.backends.cudnn as cudnn
-from torch.nn import SmoothL1Loss
-from torch.nn.functional import smooth_l1_loss
 from torch.utils.tensorboard import SummaryWriter
-
-import timm
-
-from loss import ICLoss, ILoss
-
-assert timm.__version__ == "0.3.2"  # version check
 from timm.models.layers import trunc_normal_
 from timm.data.mixup import Mixup
-from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 
+import models_vit as models
 import util.lr_decay as lrd
 import util.misc as misc
+from loss import ILoss, ICLoss
 from util.datasets import build_dataset, build_IC_dataset
 from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-import models_vit
+import warnings
+import faulthandler
+
+faulthandler.enable()
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 from engine_finetune import train_one_epoch, evaluate, evaluate_IC, evaluate_I
 
@@ -254,7 +250,7 @@ def main(args):
             prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
             label_smoothing=args.smoothing, num_classes=args.nb_classes)
 
-    model = models_vit.__dict__[args.model](
+    model = models.__dict__[args.model](
         img_size=args.input_size,
         num_classes=args.nb_classes,
         drop_path_rate=args.drop_path,
@@ -322,11 +318,6 @@ def main(args):
         criterion = ILoss()
     elif args.model == "IC_detector":
         criterion = ICLoss(args.nb_classes)
-    elif mixup_fn is not None:
-        # smoothing is handled with mixup label transform
-        criterion = SoftTargetCrossEntropy()
-    elif args.smoothing > 0.:
-        criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
