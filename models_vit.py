@@ -83,20 +83,30 @@ class ICDetector(VisionTransformer):
         return interval_preds, class_preds
 
 
-def vit_large_patch16(**kwargs):
+def RETFound_mae(**kwargs):
     model = VisionTransformer(
         patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model
 
 
-def I_detector(**kwargs):
-    model = IDetector(max_intervals=10, patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4,
-                      qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+def RETFound_dinov2(args, **kwargs):
+    model = timm.create_model(
+        'vit_large_patch14_dinov2.lvd142m',
+        pretrained=True,
+        img_size=224,
+        **kwargs
+    )
     return model
 
 
-def IC_detector(**kwargs):
-    model = ICDetector(max_intervals=10, patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4,
-                       qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+def I_detector(args, **kwargs):
+    model = IDetector(max_intervals=args.max_intervals, patch_size=16, embed_dim=1024, depth=24, num_heads=16,
+                      mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    return model
+
+
+def IC_detector(args, **kwargs):
+    model = ICDetector(max_intervals=args.max_intervals, patch_size=16, embed_dim=1024, depth=24, num_heads=16,
+                       mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model
