@@ -58,7 +58,7 @@ class IDetector(VisionTransformer):
     def forward(self, x):
         x = self.forward_features(x)
 
-        interval_preds = self.head(x)
+        interval_preds = self.head(x).squeeze(1)  # shape: (batch_size, max_intervals * 2)
         interval_preds = interval_preds.view(-1, self.max_intervals, 2)
 
         return interval_preds
@@ -75,7 +75,7 @@ class ICDetector(VisionTransformer):
     def forward(self, x):
         x = self.forward_features(x)
 
-        preds = self.head(x)  # Shape: (batch_size, max_intervals * (2 + num_classes))
+        preds = self.head(x).squeeze(1)  # shape: (batch_size, max_intervals * (2 + num_classes))
 
         interval_preds = preds[:, :self.max_intervals * 2].view(-1, self.max_intervals, 2)
         class_preds = preds[:, self.max_intervals * 2:].view(-1, self.max_intervals, self.num_classes)
