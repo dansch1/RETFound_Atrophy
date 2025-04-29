@@ -153,6 +153,7 @@ def get_args_parser():
 
     parser.add_argument('--annotations', type=str, help='annotations path')
     parser.add_argument('--max_intervals', default=10, type=int, help='number of intervals predicted by the model')
+    parser.add_argument('--class_weight', default=0.5, type=float, help='weight for class score')
 
     return parser
 

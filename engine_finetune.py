@@ -16,7 +16,7 @@ from sklearn.metrics import (
 from pycm import ConfusionMatrix
 import util.misc as misc
 import util.lr_sched as lr_sched
-from loss import ICLoss
+from loss import ICLoss, ILoss
 
 
 def train_one_epoch(
@@ -159,46 +159,31 @@ def evaluate(data_loader, model, device, args, epoch, mode, num_class, log_write
 
 
 @torch.no_grad()
-def evaluate_I(data_loader, model, device, task, epoch, mode, num_class):
-    criterion = ICLoss(num_class)
-
+def evaluate_I(data_loader, model, device, args, epoch, mode, num_class, log_writer):
+    """Evaluate the model."""
+    criterion = ILoss()
     metric_logger = misc.MetricLogger(delimiter="  ")
-    header = 'Test:'
+    os.makedirs(os.path.join(args.output_dir, args.task), exist_ok=True)
 
-    if not os.path.exists(task):
-        os.makedirs(task)
-
-    true_interval_list = []
-    prediction_interval_list = []
-
-    # switch to evaluation mode
     model.eval()
+    true_intervals, pred_intervals = [], []
 
-    for batch in metric_logger.log_every(data_loader, 10, header):
-        images = batch[0]
-        target = batch[-1]
-        images = images.to(device, non_blocking=True)
-        target = target.to(device, non_blocking=True)
+    for batch in metric_logger.log_every(data_loader, 10, f'{mode}:'):
+        images, target = batch[0].to(device, non_blocking=True), batch[-1].to(device, non_blocking=True)
 
-        # compute output
         with torch.cuda.amp.autocast():
             output = model(images)
             loss = criterion(output, target)
 
-            true_interval_list.extend(output.reshape(-1, 2).cpu().detach().numpy())
-            prediction_interval_list.extend(target.reshape(-1, 2).cpu().detach().numpy())
-
-        # acc1, _ = accuracy(class_pred, class_target, topk=(1, 2))
-
-        # batch_size = images.shape[0]
         metric_logger.update(loss=loss.item())
-        # metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
-    # gather the stats from all processes
-    iou = iou_interval(true_interval_list, prediction_interval_list)
+        true_intervals.extend(output.reshape(-1, 2).cpu().detach().numpy())
+        pred_intervals.extend(target.reshape(-1, 2).cpu().detach().numpy())
 
-    metric_logger.synchronize_between_processes()
-
+    iou = iou_interval(true_intervals, pred_intervals)
     print(f'Interval IoU: {iou}')
+
+    print(f'val loss: {metric_logger.meters["loss"].global_avg}')
+    metric_logger.synchronize_between_processes()
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, iou
 
@@ -239,89 +224,87 @@ def misc_measures(confusion_matrix):
 
 
 @torch.no_grad()
-def evaluate_IC(data_loader, model, device, task, epoch, mode, num_class):
+def evaluate_IC(data_loader, model, device, args, epoch, mode, num_class, log_writer):
+    """Evaluate the model."""
     criterion = ICLoss(num_class)
-
     metric_logger = misc.MetricLogger(delimiter="  ")
-    header = 'Test:'
+    os.makedirs(os.path.join(args.output_dir, args.task), exist_ok=True)
 
-    if not os.path.exists(task):
-        os.makedirs(task)
-
-    prediction_decode_list = []
-    prediction_list = []
-    true_label_decode_list = []
-    true_label_onehot_list = []
-
-    true_interval_list = []
-    prediction_interval_list = []
-
-    # switch to evaluation mode
     model.eval()
+    true_onehot, pred_onehot, true_labels, pred_labels, pred_softmax, = [], [], [], [], []
+    true_intervals, pred_intervals = [], []
 
-    for batch in metric_logger.log_every(data_loader, 10, header):
-        images = batch[0]
-        target = batch[-1]
-        images = images.to(device, non_blocking=True)
-        target = target.to(device, non_blocking=True)
-        interval_target, class_target = target[..., :2], target[..., 2].flatten().to(torch.int64)
-        true_label = F.one_hot(class_target, num_classes=num_class)
+    for batch in metric_logger.log_every(data_loader, 10, f'{mode}:'):
+        images, target = batch[0].to(device, non_blocking=True), batch[-1].to(device, non_blocking=True)
+        interval_target, class_target = target[..., :2].to(torch.int64), target[..., 2].flatten().to(torch.int64)
+        target_onehot = F.one_hot(class_target, num_classes=num_class)
 
-        # compute output
         with torch.cuda.amp.autocast():
             interval_pred, class_pred = model(images)
-            loss = criterion((interval_pred, class_pred), target)
             class_pred = class_pred.reshape(-1, num_class)
+            loss = criterion((interval_pred, class_pred), target)
 
-            prediction_softmax = nn.Softmax(dim=1)(class_pred)
-            _, prediction_decode = torch.max(prediction_softmax, 1)
-            _, true_label_decode = torch.max(true_label, 1)
+        class_pred_ = nn.Softmax(dim=1)(class_pred)
+        class_pred_label = class_pred_.argmax(dim=1)
+        class_pred_onehot = F.one_hot(class_pred_label.to(torch.int64), num_classes=num_class)
 
-            prediction_decode_list.extend(prediction_decode.cpu().detach().numpy())
-            true_label_decode_list.extend(true_label_decode.cpu().detach().numpy())
-            true_label_onehot_list.extend(true_label.cpu().detach().numpy())
-            prediction_list.extend(prediction_softmax.cpu().detach().numpy())
-
-            true_interval_list.extend(interval_target.reshape(-1, 2).cpu().detach().numpy())
-            prediction_interval_list.extend(interval_pred.reshape(-1, 2).cpu().detach().numpy())
-
-        acc1, _ = accuracy(class_pred, class_target, topk=(1, 2))
-
-        batch_size = images.shape[0]
         metric_logger.update(loss=loss.item())
-        metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
-    # gather the stats from all processes
-    true_label_decode_list = np.array(true_label_decode_list)
-    prediction_decode_list = np.array(prediction_decode_list)
-    confusion_matrix = multilabel_confusion_matrix(true_label_decode_list, prediction_decode_list,
-                                                   labels=[i for i in range(num_class)])
-    acc, sensitivity, specificity, precision, G, F1, mcc = misc_measures(confusion_matrix)
+        true_onehot.extend(target_onehot.cpu().numpy())
+        pred_onehot.extend(class_pred_onehot.detach().cpu().numpy())
+        true_labels.extend(class_target.cpu().numpy())
+        pred_labels.extend(class_pred_label.detach().cpu().numpy())
+        pred_softmax.extend(class_pred_.detach().cpu().numpy())
 
-    auc_roc = roc_auc_score(true_label_onehot_list, prediction_list, multi_class='ovr', average='macro')
-    iou = iou_interval(true_interval_list, prediction_interval_list)
-    auc_pr = average_precision_score(true_label_onehot_list, prediction_list, average='macro')
+        true_intervals.extend(interval_target.reshape(-1, 2).cpu().detach().numpy())
+        pred_intervals.extend(interval_pred.reshape(-1, 2).cpu().detach().numpy())
+
+    accuracy = accuracy_score(true_labels, pred_labels)
+    hamming = hamming_loss(true_onehot, pred_onehot)
+    jaccard = jaccard_score(true_onehot, pred_onehot, average='macro')
+    average_precision = average_precision_score(true_onehot, pred_softmax, average='macro')
+    kappa = cohen_kappa_score(true_labels, pred_labels)
+    f1 = f1_score(true_onehot, pred_onehot, zero_division=0, average='macro')
+    roc_auc = roc_auc_score(true_onehot, pred_softmax, multi_class='ovr', average='macro')
+    precision = precision_score(true_onehot, pred_onehot, zero_division=0, average='macro')
+    recall = recall_score(true_onehot, pred_onehot, zero_division=0, average='macro')
+
+    iou = iou_interval(true_intervals, pred_intervals)
+    print(f'Interval IoU: {iou}')
+
+    class_score = (f1 + roc_auc + kappa) / 3
+    intervall_score = iou
+    score = args.class_weight * class_score + (1 - args.class_weight) * intervall_score
+    if log_writer:
+        for metric_name, value in zip(
+                ['accuracy', 'f1', 'roc_auc', 'hamming', 'jaccard', 'precision', 'recall', 'average_precision', 'kappa',
+                 'score'],
+                [accuracy, f1, roc_auc, hamming, jaccard, precision, recall, average_precision, kappa, score]):
+            log_writer.add_scalar(f'perf/{metric_name}', value, epoch)
+
+    print(f'val loss: {metric_logger.meters["loss"].global_avg}')
+    print(f'Accuracy: {accuracy:.4f}, F1 Score: {f1:.4f}, ROC AUC: {roc_auc:.4f}, Hamming Loss: {hamming:.4f},\n'
+          f' Jaccard Score: {jaccard:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f},\n'
+          f' Average Precision: {average_precision:.4f}, Kappa: {kappa:.4f}, Score: {score:.4f}')
 
     metric_logger.synchronize_between_processes()
 
-    print(
-        'Sklearn Metrics - Acc: {:.4f} AUC-roc: {:.4f} AUC-pr: {:.4f} F1-score: {:.4f} MCC: {:.4f}'.format(acc, auc_roc,
-                                                                                                           auc_pr, F1,
-                                                                                                           mcc))
-    print(f'Interval IoU: {iou}')
-
-    results_path = task + '_metrics_{}.csv'.format(mode)
-    with open(results_path, mode='a', newline='', encoding='utf8') as cfa:
+    results_path = os.path.join(args.output_dir, args.task, f'metrics_{mode}.csv')
+    file_exists = os.path.isfile(results_path)
+    with open(results_path, 'a', newline='', encoding='utf8') as cfa:
         wf = csv.writer(cfa)
-        data2 = [[acc, sensitivity, specificity, precision, auc_roc, auc_pr, F1, mcc, metric_logger.loss]]
-        for i in data2:
-            wf.writerow(i)
+        if not file_exists:
+            wf.writerow(['val_loss', 'accuracy', 'f1', 'roc_auc', 'hamming', 'jaccard', 'precision', 'recall',
+                         'average_precision', 'kappa'])
+        wf.writerow(
+            [metric_logger.meters["loss"].global_avg, accuracy, f1, roc_auc, hamming, jaccard, precision, recall,
+             average_precision, kappa])
 
     if mode == 'test':
-        cm = ConfusionMatrix(actual_vector=true_label_decode_list, predict_vector=prediction_decode_list)
+        cm = ConfusionMatrix(actual_vector=true_labels, predict_vector=pred_labels)
         cm.plot(cmap=plt.cm.Blues, number_label=True, normalized=True, plot_lib="matplotlib")
-        plt.savefig(task + 'confusion_matrix_test.jpg', dpi=600, bbox_inches='tight')
+        plt.savefig(os.path.join(args.output_dir, args.task, 'confusion_matrix_test.jpg'), dpi=600, bbox_inches='tight')
 
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, auc_roc + iou
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, score
 
 
 def iou_interval(true_interval_list, prediction_interval_list):
