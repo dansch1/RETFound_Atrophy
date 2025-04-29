@@ -88,5 +88,5 @@ if __name__ == "__main__":
     annotations = load_annotations(args.annotations)
     targets = get_targets(images=images, annotations=annotations, num_classes=args.num_classes, x_offset=args.x_offset)
 
-    with open(args.output_path, "w") as f:
+    with open(f"{args.num_classes}c" + args.output_path, "w") as f:
         json.dump(targets, f, indent=4)
