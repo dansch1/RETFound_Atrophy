@@ -105,7 +105,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str)
     parser.add_argument("--input_size", type=int, default=224)
-    parser.add_argument("--model", type=str, default="vit_large_patch16", choices=["vit_large_patch16", "IC_detector"])
+    parser.add_argument("--model", type=str, default="RETFound_mae", choices=["vit_large_patch16", "IC_detector"])
     parser.add_argument("--num_classes", type=int, default=2)
     parser.add_argument("--resume", type=str)
     parser.add_argument("--annotations", type=str)

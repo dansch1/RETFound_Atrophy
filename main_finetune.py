@@ -46,7 +46,7 @@ def get_args_parser():
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
-    parser.add_argument('--model', default='vit_large_patch16', type=str, metavar='MODEL',
+    parser.add_argument('--model', default='RETFound_mae', type=str, metavar='MODEL',
                         help='Name of model to train')
     parser.add_argument('--input_size', default=256, type=int,
                         help='images input size')
@@ -196,8 +196,6 @@ def main(args, criterion):
     if args.finetune and not args.eval:
         # check for local or online file
         if "." in args.finetune:  # local
-            print("Load pre-trained checkpoint from: %s" % args.finetune)
-
             checkpoint_path = args.finetune
         else:  # global
             print(f"Downloading pre-trained weights from: {args.finetune}")
@@ -235,7 +233,7 @@ def main(args, criterion):
 
     if args.model == "I_detector" or args.model == "IC_detector":
         dataset_builder = build_IC_dataset
-    elif args.model == "vit_large_patch16":
+    elif args.model == "RETFound_mae":
         dataset_builder = build_dataset
     else:
         dataset_builder = build_dataset
@@ -359,7 +357,7 @@ def main(args, criterion):
         eval_fn = evaluate_I
     elif args.model == "IC_detector":
         eval_fn = evaluate_IC
-    elif args.model == "vit_large_patch16":
+    elif args.model == "RETFound_mae":
         eval_fn = evaluate
     else:
         eval_fn = evaluate
