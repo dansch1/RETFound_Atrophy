@@ -195,7 +195,7 @@ def main(args, criterion):
 
     if args.finetune and not args.eval:
         # check for local or online file
-        if "." in args.finetune:  # local
+        if args.finetune.endswith(".pth"):  # local
             checkpoint_path = args.finetune
         else:  # global
             print(f"Downloading pre-trained weights from: {args.finetune}")
