@@ -47,8 +47,19 @@ def evaluate(x, model, image_path, num_classes, annotations):
     image_name = pathlib.Path(image_path).name
     true_label = 1 if image_name in annotations else 0
 
-    print(f"Results for {image_path}: {output} -> {CLASS_NAMES[num_classes][pred_label]}")
-    print(f"Correct is: {CLASS_NAMES[num_classes][true_label]}")
+    print(f"Class results for {image_path}: {output} -> {CLASS_NAMES[num_classes][pred_label]}")
+    print(f"Correct class is: {CLASS_NAMES[num_classes][true_label]}")
+
+
+def evaluate_I(x, model, image_path, num_classes, annotations):
+    with torch.no_grad():
+        output = model(x)
+
+    image_name = pathlib.Path(image_path).name
+    true_interval = annotations.get(image_name, [])
+
+    print(f"Interval results for {image_path}: {output}")
+    print(f"Correct interval is: {true_interval}")
 
 
 def evaluate_IC(x, model, image_path, num_classes, annotations):
@@ -100,16 +111,21 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str)
     parser.add_argument("--input_size", type=int, default=224)
+    parser.add_argument('--device', default='cuda',
+                        help='device to use for testing')
     parser.add_argument("--model", type=str, default="RETFound_mae",
                         choices=["RETFound_mae", "I_detector", "IC_detector"])
     parser.add_argument("--num_classes", type=int, default=2)
     parser.add_argument("--max_intervals", type=int, default=10)
     parser.add_argument("--resume", type=str)
     parser.add_argument("--annotations", type=str)
+
     args = parser.parse_args()
 
     # chose fine-tuned model from checkpoint
+    device = torch.device(args.device)
     model = prepare_model(args)
+    model.to(device)
 
     with open(args.annotations) as f:
         annotations = json.loads(f.read())
@@ -118,12 +134,14 @@ if __name__ == '__main__':
     # supports single files or folders
     image_paths = get_all_files(args.data_path)
     transform = build_transform("eval", args)
+
     eval_fn = evaluate
 
     # run classification for each image
     for image_path in image_paths:
         # prepare image
         x = transform(Image.open(image_path).convert("RGB")).unsqueeze(0)
+        x = x.to(device, non_blocking=True)
 
-        # evaluate model with prepared image
+        # evaluate model with image
         eval_fn(x=x, model=model, image_path=image_path, num_classes=args.num_classes, annotations=annotations)

@@ -176,8 +176,8 @@ def evaluate_I(data_loader, model, device, args, epoch, mode, num_class, log_wri
             loss = criterion(output, target)
 
         metric_logger.update(loss=loss.item())
-        true_intervals.extend(output.reshape(-1, 2).cpu().detach().numpy())
-        pred_intervals.extend(target.reshape(-1, 2).cpu().detach().numpy())
+        true_intervals.extend(target.reshape(-1, 2).cpu().detach().numpy())
+        pred_intervals.extend(output.reshape(-1, 2).cpu().detach().numpy())
 
     iou = iou_interval(true_intervals, pred_intervals)
     print(f'Interval IoU: {iou}')
