@@ -3,7 +3,6 @@ import json
 import os
 import pathlib
 
-import numpy as np
 import torch
 from PIL import Image, ImageDraw
 from torch import nn
@@ -11,9 +10,6 @@ from torch import nn
 import models_vit
 
 from util.datasets import build_transform
-
-imagenet_mean = np.array([0.485, 0.456, 0.406])
-imagenet_std = np.array([0.229, 0.224, 0.225])
 
 CLASS_NAMES = {2: ["Normal", "Atrophy"], 3: ["Normal", "iORA + cORA", "iRORA + cRORA"],
                5: ["Normal", "cORA", "cRORA", "iORA", "iRORA"]}
@@ -107,9 +103,11 @@ if __name__ == '__main__':
     parser.add_argument("--model", type=str, default="RETFound_mae",
                         choices=["RETFound_mae", "I_detector", "IC_detector"])
     parser.add_argument("--num_classes", type=int, default=2)
+    parser.add_argument("--max_intervals", type=int, default=10)
     parser.add_argument("--resume", type=str)
     parser.add_argument("--annotations", type=str)
-    parser.add_argument("--max_intervals", type=int, default=10)
+    parser.add_argument('--device', default='cuda',
+                        help='device to use for testing')
     args = parser.parse_args()
 
     # chose fine-tuned model from checkpoint
@@ -122,10 +120,14 @@ if __name__ == '__main__':
     # supports single files or folders
     image_paths = get_all_files(args.data_path)
     transform = build_transform("eval", args)
+    device = torch.device(args.device)
     eval_fn = evaluate
 
     # run classification for each image
     for image_path in image_paths:
         # prepare image
-        x = transform(Image.open(image_path).convert("RGB"))
+        x = transform(Image.open(image_path).convert("RGB")).unsqueeze(0)
+        x = x.to(device, non_blocking=True)
+
+        # evaluate model with image
         eval_fn(x=x, model=model, image_path=image_path, num_classes=args.num_classes, annotations=annotations)
