@@ -186,6 +186,7 @@ def main(args, criterion):
             num_classes=args.nb_classes,
             drop_path_rate=args.drop_path,
             global_pool=args.global_pool,
+            args=args,
         )
     else:
         model = models.__dict__[args.model](
