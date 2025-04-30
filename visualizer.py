@@ -23,7 +23,7 @@ CLASS_COLORS = {2: {0: "white", 1: "red"},  # 1 class: (0.Normal), 1.atrophy
 def prepare_model(args):
     model = models_vit.__dict__[args.model](
         img_size=args.input_size,
-        num_classes=args.nb_classes,
+        num_classes=args.num_classes,
         args=args,
     )
 
