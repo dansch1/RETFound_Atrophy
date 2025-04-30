@@ -82,6 +82,7 @@ class ICDataset(Dataset):
     def __getitem__(self, idx):
         image_path = self.data[idx]
         image = Image.open(image_path).convert("RGB")
+        # make sure len(targets) >= self.max_intervals
         targets = self.annotations.get(image_path.name, [])[:self.max_intervals]
 
         while len(targets) < self.max_intervals:

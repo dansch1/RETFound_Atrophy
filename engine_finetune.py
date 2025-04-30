@@ -311,8 +311,15 @@ def iou_interval(true_intervals, pred_intervals):
     iou_scores = []
 
     for (x0_true, x1_true), (x0_pred, x1_pred) in zip(true_intervals, pred_intervals):
+        if x0_true < 0 and x1_true < 0 and x0_pred < 0 and x1_pred < 0:
+            continue
+
+        if (x0_true < 0 or x1_true < 0) or (x0_pred < 0 or x1_pred < 0):
+            iou_scores.append(0.0)
+            continue
+
         intersection = max(0, min(x1_true, x1_pred) - max(x0_true, x0_pred))
-        union = max(x1_true, x1_pred) - min(x0_true, x0_pred)
+        union = (x1_true - x0_true) + (x1_pred - x0_pred) - intersection
         iou = intersection / union if union > 0 else 0
         iou_scores.append(iou)
 
