@@ -23,7 +23,7 @@ CLASS_COLORS = {2: {0: "white", 1: "red"},  # 1 class: (0.Normal), 1.atrophy
 def prepare_model(args):
     model = models_vit.__dict__[args.model](
         img_size=args.input_size,
-        num_classes=args.num_classes,
+        num_classes=args.nb_classes,
         args=args,
     )
 
@@ -36,7 +36,7 @@ def prepare_model(args):
     return model
 
 
-def evaluate(x, model, image_path, num_classes, annotations):
+def evaluate(x, model, image_path, annotations, num_classes):
     with torch.no_grad():
         output = model(x)
 
@@ -51,7 +51,7 @@ def evaluate(x, model, image_path, num_classes, annotations):
     print(f"Correct class is: {CLASS_NAMES[num_classes][true_label]}")
 
 
-def evaluate_I(x, model, image_path, num_classes, annotations):
+def evaluate_I(x, model, image_path, annotations, num_classes):
     with torch.no_grad():
         output = model(x)
 
@@ -62,7 +62,7 @@ def evaluate_I(x, model, image_path, num_classes, annotations):
     print(f"Correct interval is: {true_interval}")
 
 
-def evaluate_IC(x, model, image_path, num_classes, annotations):
+def evaluate_IC(x, model, image_path, annotations, num_classes):
     with torch.no_grad():
         interval_pred, class_pred = model(x)
         interval_pred = interval_pred.reshape(-1, 2)
@@ -115,7 +115,7 @@ if __name__ == '__main__':
                         help='device to use for testing')
     parser.add_argument("--model", type=str, default="RETFound_mae",
                         choices=["RETFound_mae", "I_detector", "IC_detector"])
-    parser.add_argument("--num_classes", type=int, default=2)
+    parser.add_argument("--nb_classes", type=int, default=2)
     parser.add_argument("--max_intervals", type=int, default=10)
     parser.add_argument("--resume", type=str)
     parser.add_argument("--annotations", type=str)
@@ -149,4 +149,4 @@ if __name__ == '__main__':
         x = x.to(device, non_blocking=True)
 
         # evaluate model with image
-        eval_fn(x=x, model=model, image_path=image_path, num_classes=args.num_classes, annotations=annotations)
+        eval_fn(x=x, model=model, image_path=image_path, annotations=annotations, num_classes=args.nb_classes)
