@@ -40,12 +40,13 @@ def evaluate(x, model, image_path, annotations, num_classes):
     with torch.no_grad():
         output = model(x)
 
-    output = nn.Softmax(dim=1)(output)
-    output_label = output.argmax(dim=1)
+    output_ = nn.Softmax(dim=1)(output)
+    output_label = output_.argmax(dim=1)
+
     pred_label = output_label.squeeze(0).detach().cpu().numpy()
 
     image_name = pathlib.Path(image_path).name
-    true_label = 1 if image_name in annotations else 0
+    true_label = annotations[image_name][2] if image_name in annotations else 0
 
     print(f"Class results for {image_path}: {output} -> {CLASS_NAMES[num_classes][pred_label]}")
     print(f"Correct class is: {CLASS_NAMES[num_classes][true_label]}")
@@ -55,29 +56,40 @@ def evaluate_I(x, model, image_path, annotations, num_classes):
     with torch.no_grad():
         output = model(x)
 
+    pred_interval = output.reshape(-1, 2).cpu().detach().numpy()
+
     image_name = pathlib.Path(image_path).name
-    true_interval = annotations.get(image_name, [])
+    true_interval = annotations.get(image_name, [])[:2]
 
     print(f"Interval results for {image_path}: {output}")
     print(f"Correct interval is: {true_interval}")
+
+    # TODO: draw results
 
 
 def evaluate_IC(x, model, image_path, annotations, num_classes):
     with torch.no_grad():
         interval_pred, class_pred = model(x)
-        interval_pred = interval_pred.reshape(-1, 2)
         class_pred = class_pred.reshape(-1, num_classes)
-        class_pred = nn.Softmax(dim=1)(class_pred)
-        class_pred = torch.max(class_pred, 1)
+
+    class_pred_ = nn.Softmax(dim=1)(class_pred)
+    output_label = class_pred_.argmax(dim=1)
+
+    image_name = pathlib.Path(image_path).name
+
+    pred_label = output_label.squeeze(0).detach().cpu().numpy()
+    true_label = annotations[image_name][2] if image_name in annotations else 0
+
+    pred_interval = interval_pred.reshape(-1, 2).cpu().detach().numpy()
+    true_interval = annotations.get(image_name, [])[:2]
+
+    print(f"Class results for {image_path}: {class_pred} -> {CLASS_NAMES[num_classes][pred_label]}")
+    print(f"Correct class is: {CLASS_NAMES[num_classes][true_label]}")
 
     print(f"Interval results for {image_path}: {interval_pred}")
-    print(f"Class results for {image_path}: {class_pred}")
+    print(f"Correct interval is: {true_interval}")
 
-    # target = get_class_intervals(image=image_path, annotations=annotations, num_classes=num_classes)
-    draw_results(image_path=image_path, results=[], num_classes=num_classes, tag="target")
-
-    draw_results(image_path=image_path, results=zip(interval_pred, class_pred), num_classes=num_classes,
-                 tag="prediction")
+    # TODO: draw results
 
 
 def draw_results(image_path, results, num_classes, tag):
