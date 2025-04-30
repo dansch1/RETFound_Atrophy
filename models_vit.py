@@ -101,14 +101,12 @@ def RETFound_dinov2(args, **kwargs):
 
 
 def I_detector(args, **kwargs):
-    model = IDetector(img_size=args.input_size, global_pool=args.global_pool, max_intervals=args.max_intervals,
-                      patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, qkv_bias=True,
-                      norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model = IDetector(max_intervals=args.max_intervals, patch_size=16, embed_dim=1024, depth=24, num_heads=16,
+                      mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model
 
 
 def IC_detector(args, **kwargs):
-    model = ICDetector(img_size=args.input_size, global_pool=args.global_pool, max_intervals=args.max_intervals,
-                       patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, qkv_bias=True,
-                       norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model = ICDetector(max_intervals=args.max_intervals, patch_size=16, embed_dim=1024, depth=24, num_heads=16,
+                       mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model

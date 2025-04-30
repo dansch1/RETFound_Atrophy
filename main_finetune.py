@@ -180,18 +180,18 @@ def main(args, criterion):
 
     cudnn.benchmark = True
 
-    if args.model == 'RETFound_mae':
+    if args.model == 'RETFound_dinov2':
+        model = models.__dict__[args.model](
+            num_classes=args.nb_classes,
+            drop_path_rate=args.drop_path,
+            args=args,
+        )
+    else:
         model = models.__dict__[args.model](
             img_size=args.input_size,
             num_classes=args.nb_classes,
             drop_path_rate=args.drop_path,
             global_pool=args.global_pool,
-            args=args,
-        )
-    else:
-        model = models.__dict__[args.model](
-            num_classes=args.nb_classes,
-            drop_path_rate=args.drop_path,
             args=args,
         )
 
