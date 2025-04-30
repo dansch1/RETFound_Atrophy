@@ -106,8 +106,6 @@ if __name__ == '__main__':
     parser.add_argument("--max_intervals", type=int, default=10)
     parser.add_argument("--resume", type=str)
     parser.add_argument("--annotations", type=str)
-    parser.add_argument('--device', default='cuda',
-                        help='device to use for testing')
     args = parser.parse_args()
 
     # chose fine-tuned model from checkpoint
@@ -120,14 +118,12 @@ if __name__ == '__main__':
     # supports single files or folders
     image_paths = get_all_files(args.data_path)
     transform = build_transform("eval", args)
-    device = torch.device(args.device)
     eval_fn = evaluate
 
     # run classification for each image
     for image_path in image_paths:
         # prepare image
         x = transform(Image.open(image_path).convert("RGB")).unsqueeze(0)
-        x = x.to(device, non_blocking=True)
 
         # evaluate model with image
         eval_fn(x=x, model=model, image_path=image_path, num_classes=args.num_classes, annotations=annotations)
