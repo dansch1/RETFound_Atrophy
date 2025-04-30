@@ -46,7 +46,7 @@ def evaluate(x, model, image_path, annotations, num_classes):
     pred_label = output_label.squeeze(0).detach().cpu().numpy()
 
     image_name = pathlib.Path(image_path).name
-    true_label = annotations[image_name][2] if image_name in annotations else 0
+    true_label = max(interval[2] for interval in annotations[image_name]) if image_name in annotations else 0
 
     print(f"Class results for {image_path}: {output} -> {CLASS_NAMES[num_classes][pred_label]}")
     print(f"Correct class is: {CLASS_NAMES[num_classes][true_label]}")
@@ -75,19 +75,15 @@ def evaluate_IC(x, model, image_path, annotations, num_classes):
     class_pred_ = nn.Softmax(dim=1)(class_pred)
     output_label = class_pred_.argmax(dim=1)
 
-    image_name = pathlib.Path(image_path).name
-
     pred_label = output_label.squeeze(0).detach().cpu().numpy()
-    true_label = annotations[image_name][2] if image_name in annotations else 0
-
     pred_interval = interval_pred.reshape(-1, 2).cpu().detach().numpy()
-    true_interval = annotations.get(image_name, [])[:2]
+
+    image_name = pathlib.Path(image_path).name
+    true_values = annotations.get(image_name, [])
 
     print(f"Class results for {image_path}: {class_pred} -> {CLASS_NAMES[num_classes][pred_label]}")
-    print(f"Correct class is: {CLASS_NAMES[num_classes][true_label]}")
-
     print(f"Interval results for {image_path}: {interval_pred}")
-    print(f"Correct interval is: {true_interval}")
+    print(f"Correct is: {true_values}")
 
     # TODO: draw results
 
