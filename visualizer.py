@@ -125,5 +125,5 @@ if __name__ == '__main__':
         # prepare image
         x = transform(Image.open(image_path).convert("RGB")).unsqueeze(0)
 
-        # evaluate model with image
+        # evaluate model with prepared image
         eval_fn(x=x, model=model, image_path=image_path, num_classes=args.num_classes, annotations=annotations)
