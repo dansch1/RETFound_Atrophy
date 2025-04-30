@@ -9,7 +9,6 @@ from PIL import Image, ImageDraw
 from torch import nn
 
 import models_vit
-from annotations import get_class_intervals, load_annotations
 
 from util.datasets import build_transform
 
@@ -67,8 +66,8 @@ def evaluate_IC(x, model, image_path, num_classes, annotations):
     print(f"Interval results for {image_path}: {interval_pred}")
     print(f"Class results for {image_path}: {class_pred}")
 
-    target = get_class_intervals(image=image_path, annotations=annotations, num_classes=num_classes)
-    draw_results(image_path=image_path, results=target, num_classes=num_classes, tag="target")
+    # target = get_class_intervals(image=image_path, annotations=annotations, num_classes=num_classes)
+    draw_results(image_path=image_path, results=[], num_classes=num_classes, tag="target")
 
     draw_results(image_path=image_path, results=zip(interval_pred, class_pred), num_classes=num_classes,
                  tag="prediction")
