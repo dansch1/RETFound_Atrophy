@@ -28,6 +28,10 @@ def get_targets(images, annotations, num_classes, x_offset):
 
     for path, name in images:
         class_intervals = get_class_intervals(image=name, annotations=annotations, num_classes=num_classes)
+
+        if len(class_intervals) == 0:
+            continue
+
         result[name] = [[max(x0 - x_offset, 0), max(x1 - x_offset, 0), cls] for x0, x1, cls in class_intervals]
 
     return result
@@ -77,9 +81,9 @@ def combine_intervals(intervals):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", type=str)
-    parser.add_argument("--annotations", type=str)
-    parser.add_argument("--num_classes", type=int, default=3)
+    parser.add_argument("--data_path", type=str, default=r"C:\Users\d_schr33\Desktop\Unterlagen\Promotion\Data\cam 2.0\train_data")
+    parser.add_argument("--annotations", type=str, default=r"C:\Users\d_schr33\Desktop\Unterlagen\Promotion\Data\cam 2.0\raw_data\annotations.xml")
+    parser.add_argument("--num_classes", type=int, default=2)
     parser.add_argument("--x_offset", type=tuple, default=496)
     parser.add_argument("--output_path", type=str, default="annotations.json")
     args = parser.parse_args()
@@ -88,5 +92,5 @@ if __name__ == "__main__":
     annotations = load_annotations(args.annotations)
     targets = get_targets(images=images, annotations=annotations, num_classes=args.num_classes, x_offset=args.x_offset)
 
-    with open(f"{args.num_classes}c" + args.output_path, "w") as f:
+    with open(f"{args.num_classes}c_" + args.output_path, "w") as f:
         json.dump(targets, f, indent=4)
