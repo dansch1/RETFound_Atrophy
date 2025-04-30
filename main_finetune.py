@@ -22,7 +22,7 @@ import models_vit as models
 import util.lr_decay as lrd
 import util.misc as misc
 from loss import ILoss, ICLoss
-from util.datasets import build_dataset, build_I_dataset, build_IC_dataset
+from util.datasets import build_dataset, build_IC_dataset
 from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 from huggingface_hub import hf_hub_download, login
@@ -232,9 +232,7 @@ def main(args, criterion):
 
         trunc_normal_(model.head.weight, std=2e-5)
 
-    if args.model == "I_detector":
-        dataset_builder = build_I_dataset
-    elif args.model == "IC_detector":
+    if args.model == "I_detector" or args.model == "IC_detector":
         dataset_builder = build_IC_dataset
     elif args.model == "RETFound_mae":
         dataset_builder = build_dataset

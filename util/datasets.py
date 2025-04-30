@@ -22,19 +22,12 @@ def build_dataset(is_train, args):
     return dataset
 
 
-def build_I_dataset(is_train, args):
-    return _build_custom_dataset(is_train, args, IDataset)
-
-
 def build_IC_dataset(is_train, args):
-    return _build_custom_dataset(is_train, args, ICDataset)
-
-
-def _build_custom_dataset(is_train, args, dataset):
     transform = build_transform(is_train, args)
     root = os.path.join(args.data_path, is_train)
+    dataset = ICDataset(root, args, transform=transform)
 
-    return dataset(root, args, transform=transform)
+    return dataset
 
 
 def build_transform(is_train, args):
@@ -89,7 +82,7 @@ class ICDataset(Dataset):
     def __getitem__(self, idx):
         image_path = self.data[idx]
         image = Image.open(image_path).convert("RGB")
-        targets = self.annotations.get(image_path.name, [])
+        targets = self.annotations.get(image_path.name, [])[:self.max_intervals]
 
         while len(targets) < self.max_intervals:
             targets.append([-1, -1, 0])
@@ -100,9 +93,3 @@ class ICDataset(Dataset):
             image = self.transform(image)
 
         return image, targets
-
-
-class IDataset(ICDataset):
-    def __getitem__(self, idx):
-        image, targets = super().__getitem__(idx)
-        return image, targets[:, :-1]
