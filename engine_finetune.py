@@ -312,6 +312,7 @@ def iou_interval(true_intervals, pred_intervals):
 
     for (x0_true, x1_true), (x0_pred, x1_pred) in zip(true_intervals, pred_intervals):
         if x0_true < 0 and x1_true < 0 and x0_pred < 0 and x1_pred < 0:
+            iou_scores.append(1.0)
             continue
 
         if (x0_true < 0 or x1_true < 0) or (x0_pred < 0 or x1_pred < 0):
