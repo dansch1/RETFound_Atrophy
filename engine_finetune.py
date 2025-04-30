@@ -307,10 +307,10 @@ def evaluate_IC(data_loader, model, device, args, epoch, mode, num_class, log_wr
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, score
 
 
-def iou_interval(true_interval_list, prediction_interval_list):
+def iou_interval(true_intervals, pred_intervals):
     iou_scores = []
 
-    for (x0_true, x1_true), (x0_pred, x1_pred) in zip(true_interval_list, prediction_interval_list):
+    for (x0_true, x1_true), (x0_pred, x1_pred) in zip(true_intervals, pred_intervals):
         intersection = max(0, min(x1_true, x1_pred) - max(x0_true, x0_pred))
         union = max(x1_true, x1_pred) - min(x0_true, x0_pred)
         iou = intersection / union if union > 0 else 0
