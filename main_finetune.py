@@ -47,7 +47,7 @@ def get_args_parser():
 
     # Model parameters
     parser.add_argument('--model', default='RETFound_mae', type=str, metavar='MODEL',
-                        help='Name of model to train')
+                        help='Name of model to train', choices=["RETFound_mae", "I_detector", "IC_detector"])
     parser.add_argument('--input_size', default=256, type=int,
                         help='images input size')
     parser.add_argument('--drop_path', type=float, default=0.2, metavar='PCT',
@@ -235,8 +235,6 @@ def main(args, criterion):
 
     if args.model == "I_detector" or args.model == "IC_detector":
         dataset_builder = build_IC_dataset
-    elif args.model == "RETFound_mae":
-        dataset_builder = build_dataset
     else:
         dataset_builder = build_dataset
 
@@ -359,8 +357,6 @@ def main(args, criterion):
         eval_fn = evaluate_I
     elif args.model == "IC_detector":
         eval_fn = evaluate_IC
-    elif args.model == "RETFound_mae":
-        eval_fn = evaluate
     else:
         eval_fn = evaluate
 

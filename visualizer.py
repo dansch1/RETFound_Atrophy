@@ -135,7 +135,12 @@ if __name__ == '__main__':
     image_paths = get_all_files(args.data_path)
     transform = build_transform("eval", args)
 
-    eval_fn = evaluate
+    if args.model == "I_detector":
+        eval_fn = evaluate_I
+    elif args.model == "IC_detector":
+        eval_fn = evaluate_IC
+    else:
+        eval_fn = evaluate
 
     # run classification for each image
     for image_path in image_paths:
