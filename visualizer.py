@@ -42,7 +42,7 @@ def evaluate(x, model, image_path, num_classes, annotations):
 
     output = nn.Softmax(dim=1)(output)
     output_label = output.argmax(dim=1)
-    pred_label = output_label.detach().cpu().numpy()
+    pred_label = output_label.squeeze(0).detach().cpu().numpy()
 
     image_name = pathlib.Path(image_path).name
     true_label = 1 if image_name in annotations else 0
