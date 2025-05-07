@@ -4,9 +4,9 @@ import os
 from lxml import etree
 import argparse
 
-CLASS_REDUCTION = {2: {"iORA": 1, "cORA": 1, "iRORA": 1, "cRORA": 1},  # 1 class: (0.Normal), 1.atrophy
-                   3: {"iORA": 1, "cORA": 1, "iRORA": 2, "cRORA": 2},  # 2 classes: 1.iORA+cORA, 2.iRORA+cRORA
-                   5: {"iORA": 1, "cORA": 2, "iRORA": 3, "cRORA": 4}}  # 4 classes: 1.iORA, 2.cORA, 3.iRORA, 4.cRORA
+CLASS_REDUCTION = {1: {"iORA": 0, "cORA": 0, "iRORA": 0, "cRORA": 0},  # 1 class: 0.atrophy
+                   2: {"iORA": 1, "cORA": 1, "iRORA": 2, "cRORA": 2},  # 2 classes: 1.iORA+cORA, 2.iRORA+cRORA
+                   4: {"iORA": 1, "cORA": 2, "iRORA": 3, "cRORA": 4}}  # 4 classes: 1.iORA, 2.cORA, 3.iRORA, 4.cRORA
 
 
 def load_images(data_path):
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str, default=r"C:\Users\d_schr33\Desktop\Unterlagen\Promotion\Data\cam 2.0\train_data")
     parser.add_argument("--annotations", type=str, default=r"C:\Users\d_schr33\Desktop\Unterlagen\Promotion\Data\cam 2.0\raw_data\annotations.xml")
-    parser.add_argument("--num_classes", type=int, default=2)
+    parser.add_argument("--num_classes", type=int, default=4)
     parser.add_argument("--x_offset", type=tuple, default=496)
     parser.add_argument("--output_path", type=str, default="annotations.json")
     args = parser.parse_args()
