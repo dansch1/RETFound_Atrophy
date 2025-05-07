@@ -45,7 +45,7 @@ def evaluate(x, model, image_path, annotations, num_classes):
     pred_label = output_label.squeeze(0).detach().cpu().numpy()
 
     image_name = pathlib.Path(image_path).name
-    true_label = max(interval[2] for interval in annotations[image_name]) if image_name in annotations else 0
+    true_label = 0 if image_name in annotations else 1
 
     print(f"Class results for {image_path}: {output_} -> {pred_label} ({'Atrophy' if pred_label == 0 else 'Normal'})")
     print(f"Correct class is: {true_label} ({'Atrophy' if true_label == 0 else 'Normal'})")
