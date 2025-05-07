@@ -48,7 +48,7 @@ def evaluate(x, model, image_path, annotations, num_classes):
     true_label = max(interval[2] for interval in annotations[image_name]) if image_name in annotations else 0
 
     print(f"Class results for {image_path}: {output_} -> {pred_label} ({'Atrophy' if pred_label == 0 else 'Normal'})")
-    print(f"Correct class is: {CLASS_NAMES[num_classes][true_label]}")
+    print(f"Correct class is: {true_label} ({'Atrophy' if true_label == 0 else 'Normal'})")
 
 
 def evaluate_I(x, model, image_path, annotations, num_classes):
