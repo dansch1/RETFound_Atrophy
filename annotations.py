@@ -5,8 +5,8 @@ from lxml import etree
 import argparse
 
 CLASS_REDUCTION = {1: {"iORA": 0, "cORA": 0, "iRORA": 0, "cRORA": 0},  # 1 class: 0.atrophy
-                   2: {"iORA": 1, "cORA": 1, "iRORA": 2, "cRORA": 2},  # 2 classes: 1.iORA+cORA, 2.iRORA+cRORA
-                   4: {"iORA": 1, "cORA": 2, "iRORA": 3, "cRORA": 4}}  # 4 classes: 1.iORA, 2.cORA, 3.iRORA, 4.cRORA
+                   2: {"iORA": 0, "cORA": 0, "iRORA": 1, "cRORA": 1},  # 2 classes: 0.iORA+cORA, 1.iRORA+cRORA
+                   4: {"iORA": 0, "cORA": 1, "iRORA": 2, "cRORA": 3}}  # 4 classes: 0.iORA, 1.cORA, 2.iRORA, 3.cRORA
 
 
 def load_images(data_path):

@@ -35,7 +35,7 @@ def prepare_model(args):
     return model
 
 
-def evaluate(x, model, image_path, annotations, num_classes):
+def evaluate(x, model, image, annotations, args):
     with torch.no_grad():
         output = model(x)
 
@@ -44,59 +44,68 @@ def evaluate(x, model, image_path, annotations, num_classes):
 
     pred_label = output_label.squeeze(0).detach().cpu().numpy()
 
-    image_name = pathlib.Path(image_path).name
-    true_label = 0 if image_name in annotations else 1
+    image_path = pathlib.Path(image)
+    true_label = 0 if image_path.name in annotations else 1
 
     print(f"Class results for {image_path}: {output_} -> {pred_label} ({'Atrophy' if pred_label == 0 else 'Normal'})")
     print(f"Correct class is: {true_label} ({'Atrophy' if true_label == 0 else 'Normal'})")
 
 
-def evaluate_I(x, model, image_path, annotations, num_classes):
+def evaluate_I(x, model, image, annotations, args):
     with torch.no_grad():
         output = model(x)
 
     output_ = output.reshape(-1, 2)
-    output_interval = output_[(output_[:, 0] >= 0) & (output_[:, 1] >= 0)]
+    output_intervals = output_[(output_[:, 0] >= 0) & (output_[:, 1] >= 0)]  # remove dummy intervals
 
-    pred_interval = output_interval.cpu().detach().numpy()
+    pred_intervals = output_intervals.cpu().detach().tolist()
+    prediction = [interval + [0] for interval in pred_intervals]  # add atrophy class
 
-    image_name = pathlib.Path(image_path).name
-    true_interval = annotations.get(image_name, [])[:2]
+    image_path = pathlib.Path(image)
+    target = annotations.get(image_path.name, [])
 
-    print(f"Interval results for {image_path}: {output_} -> {pred_interval}")
-    print(f"Correct interval is: {true_interval}")
+    print(f"Prediction for {image_path}: {output_} -> {prediction}")
+    print(f"Correct are: {target}")
 
-    # TODO: draw results
+    num_classes = args.nb_classes
+    output_dir = args.output_dir
+    draw_results(image_path=image_path, results=prediction, num_classes=num_classes,
+                 output_dir=output_dir, tag="prediction")
+    draw_results(image_path=image_path, results=target, num_classes=num_classes,
+                 output_dir=output_dir, tag="target")
 
 
-def evaluate_IC(x, model, image_path, annotations, num_classes):
+def evaluate_IC(x, model, image, annotations, args):
+    num_classes = args.nb_classes
+
     with torch.no_grad():
         interval_pred, class_pred = model(x)
         class_pred = class_pred.reshape(-1, num_classes)
 
     class_pred_ = nn.Softmax(dim=1)(class_pred)
     output_label = class_pred_.argmax(dim=1)
-
-    pred_label = output_label.squeeze(0).detach().cpu().numpy()
-
     interval_pred_ = interval_pred.reshape(-1, 2)
-    output_interval = interval_pred_[(interval_pred_[:, 0] >= 0) & (interval_pred_[:, 1] >= 0)]
 
-    pred_interval = output_interval.cpu().detach().numpy()
+    output_ = torch.cat(tensors=(interval_pred_, output_label.unsqueeze(1)), dim=1)
+    prediction_ = output_[(output_[:, 0] >= 0) & (output_[:, 1] >= 0)]  # remove dummy intervals
+    prediction = prediction_.cpu().detach().tolist()
 
-    image_name = pathlib.Path(image_path).name
-    true_values = annotations.get(image_name, [])
+    image_path = pathlib.Path(image)
+    target = annotations.get(image_path.name, [])
 
-    # TODO: zusammenfassen
-    print(f"Class results for {image_path}: {class_pred_} -> {pred_label}")
-    print(f"Interval results for {image_path}: {interval_pred_} -> {pred_interval}")
-    print(f"Correct is: {true_values}")
+    print(f"Prediction for {image_path}: {output_} -> {prediction}")
+    print(f"Correct are: {target}")
 
-    # TODO: draw results (pred + target)
+    output_dir = args.output_dir
+    draw_results(image_path=image_path, results=prediction, num_classes=num_classes,
+                 output_dir=output_dir, tag="prediction")
+    draw_results(image_path=image_path, results=target, num_classes=num_classes,
+                 output_dir=output_dir, tag="target")
 
 
-def draw_results(image_path, results, num_classes, tag):
-    path = os.path.dirname(image_path)
+def draw_results(image_path, results, num_classes, output_dir, tag):
+    if len(results) == 0:
+        return
 
     image = Image.open(image_path)
     draw = ImageDraw.Draw(image)
@@ -107,8 +116,7 @@ def draw_results(image_path, results, num_classes, tag):
                        outline=CLASS_COLORS[num_classes][cls], width=4)
 
         # save annotated image
-        name, extension = os.path.splitext(image_path)
-        image.save(os.path.join(path, f"{name}_{tag}{extension}"))
+        image.save(os.path.join(output_dir, f"{image_path.stem}_{tag}{image_path.suffix}"))
 
 
 def get_all_files(data_path):
@@ -134,6 +142,8 @@ if __name__ == '__main__':
     parser.add_argument("--max_intervals", type=int, default=10)
     parser.add_argument("--resume", type=str)
     parser.add_argument("--annotations", type=str)
+    parser.add_argument('--output_dir', default='./results',
+                        help='path where to save results')
 
     args = parser.parse_args()
 
@@ -147,7 +157,7 @@ if __name__ == '__main__':
 
     # get all images
     # supports single files or folders
-    image_paths = get_all_files(args.data_path)
+    images = get_all_files(args.data_path)
     transform = build_transform("eval", args)
 
     if args.model == "I_detector":
@@ -158,10 +168,10 @@ if __name__ == '__main__':
         eval_fn = evaluate
 
     # run classification for each image
-    for image_path in image_paths:
+    for image in images:
         # prepare image
-        x = transform(Image.open(image_path).convert("RGB")).unsqueeze(0)
+        x = transform(Image.open(image).convert("RGB")).unsqueeze(0)
         x = x.to(device, non_blocking=True)
 
         # evaluate model with image
-        eval_fn(x=x, model=model, image_path=image_path, annotations=annotations, num_classes=args.nb_classes)
+        eval_fn(x=x, model=model, image=image, annotations=annotations, args=args)
