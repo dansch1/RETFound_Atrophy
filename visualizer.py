@@ -104,19 +104,19 @@ def evaluate_IC(x, model, image, annotations, args):
 
 
 def draw_results(image_path, results, num_classes, output_dir, tag):
-    if len(results) == 0:
-        return
-
     image = Image.open(image_path)
     draw = ImageDraw.Draw(image)
+
+    # create output directory if necessary
+    pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     for i, (x0, x1, cls) in enumerate(results):
         # draw bbox
         draw.rectangle(xy=((max(x0, 0), 0), (min(x1, image.width - 1), image.height - 1)),
                        outline=CLASS_COLORS[num_classes][cls], width=4)
 
-        # save annotated image
-        image.save(os.path.join(output_dir, f"{image_path.stem}_{tag}{image_path.suffix}"))
+    # save annotated image
+    image.save(os.path.join(output_dir, f"{image_path.stem}_{tag}{image_path.suffix}"))
 
 
 def get_all_files(data_path):
