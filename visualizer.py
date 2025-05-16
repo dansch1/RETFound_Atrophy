@@ -111,8 +111,10 @@ def draw_results(image_path, results, num_classes, output_dir, tag):
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     for i, (x0, x1, cls) in enumerate(results):
+        lower, upper = min(x0, x1), max(x0, x1)
+
         # draw bbox
-        draw.rectangle(xy=((max(x0, 0), 0), (min(x1, image.width - 1), image.height - 1)),
+        draw.rectangle(xy=((max(lower, 0), 0), (min(upper, image.width - 1), image.height - 1)),
                        outline=CLASS_COLORS[num_classes][cls], width=4)
 
     # save annotated image
