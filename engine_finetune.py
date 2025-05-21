@@ -276,11 +276,6 @@ def iou_score(true_intervals, pred_intervals, input_size):
     iou_scores = []
 
     for (x0_true, x1_true), (x0_pred, x1_pred) in zip(true_intervals, pred_intervals):
-        # skip fully padded entries
-        if x0_true < 0 and x1_true < 0 and x0_pred < 0 and x1_pred < 0:
-            iou_scores.append(1.0)
-            continue
-
         # sort intervals
         x0_true, x1_true = sorted([x0_true, x1_true])
         x0_pred, x1_pred = sorted([x0_pred, x1_pred])
@@ -292,7 +287,7 @@ def iou_score(true_intervals, pred_intervals, input_size):
         x1_pred = max(0, min(x1_pred, input_size))
 
         # check for empty or invalid intervals after clamp
-        if x1_true <= x0_true or x1_pred <= x0_pred:
+        if x1_pred <= x0_pred:
             iou_scores.append(0.0)
             continue
 

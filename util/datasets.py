@@ -93,7 +93,7 @@ class ICDataset(Dataset):
         targets = self.annotations.get(image_path.name, [])[:self.max_intervals]
 
         while len(targets) < self.max_intervals:
-            targets.append([-1, -1, 0])
+            targets.append([0, 0, 0])
 
         targets = torch.tensor(targets[:self.max_intervals + 1], dtype=torch.float32)
 

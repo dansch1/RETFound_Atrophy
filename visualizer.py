@@ -11,12 +11,13 @@ import models_vit
 
 from util.datasets import build_transform
 
-CLASS_NAMES = {1: ["Atrophy"], 2: ["iORA + cORA", "iRORA + cRORA"],
-               4: ["cORA", "cRORA", "iORA", "iRORA"]}
+CLASS_NAMES = {2: ["Normal", "Atrophy"], 3: ["Normal", "iORA + cORA", "iRORA + cRORA"],
+               5: ["Normal", "cORA", "cRORA", "iORA", "iRORA"]}
 
-CLASS_COLORS = {1: {0: "red"},  # 1 class: 0.atrophy
-                2: {0: "green", 1: "red"},  # 2 classes: 0.iORA+cORA, 1.iRORA+cRORA
-                4: {0: "green", 1: "blue", 2: "yellow", 3: "red"}}  # 4 classes: 0.iORA, 1.cORA, 2.iRORA, 3.cRORA
+CLASS_COLORS = {2: {0: "white", 1: "red"},  # 1 class: (0.Normal), 1.atrophy
+                3: {0: "white", 1: "green", 2: "red"},  # 2 classes: 1.iORA+cORA, 2.iRORA+cRORA
+                5: {0: "white", 1: "green", 2: "blue", 3: "yellow",
+                    4: "red"}}  # 4 classes: 1.iORA, 2.cORA, 3.iRORA, 4.cRORA
 
 
 def prepare_model(args):

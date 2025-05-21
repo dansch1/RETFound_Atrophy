@@ -13,11 +13,7 @@ class ILoss(nn.Module):
         self.interval_loss = SmoothL1Loss(interval_size_average, interval_reduce, interval_reduction, interval_beta)
 
     def forward(self, input: Tensor, target: Tensor) -> Tensor:
-        input_interval = input
-        target_interval = target[..., :2]  # remove class info
-        interval_loss = self.interval_loss(input_interval, target_interval)
-
-        return interval_loss
+        return self.interval_loss(input, target)
 
 
 class ICLoss(ILoss):
@@ -32,8 +28,16 @@ class ICLoss(ILoss):
                                            class_reduction)
 
     def forward(self, input: Tensor, target: Tensor) -> Tensor:
-        input_class = input[1].reshape(-1, self.num_classes)  # (16*10, 2) = (160, 2)
-        target_class = target[..., 2].reshape(-1).long()  # (16*10,) = (160,)
-        class_loss = self.class_loss(input_class, target_class)
+        input_intervals, input_classes = input
 
-        return super().forward(input[0], target) + class_loss
+        input_classes = input_classes.reshape(-1, self.num_classes)  # (16*10, 2) = (160, 2)
+        target_classes = target[..., 2].reshape(-1).long()  # (16*10,) = (160,)
+        class_loss = self.class_loss(input_classes, target_classes)
+
+        target_classes_flat = target_classes.reshape(-1)
+        mask = target_classes_flat > 0
+        target_intervals = target[..., :2]
+        interval_loss = super().forward(input_intervals[mask],
+                                        target_intervals[mask]) if mask.any() else input_intervals.new_tensor(0.0)
+
+        return interval_loss + class_loss
