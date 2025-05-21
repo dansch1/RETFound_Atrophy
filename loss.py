@@ -18,12 +18,15 @@ class ILoss(nn.Module):
 
 class ICLoss(ILoss):
 
-    def __init__(self, num_classes, interval_size_average=None, interval_reduce=None, interval_reduction: str = 'mean',
+    def __init__(self, num_classes, interval_weight, interval_size_average=None, interval_reduce=None,
+                 interval_reduction: str = 'mean',
                  interval_beta: float = 1.0, class_weight: Optional[Tensor] = None, class_size_average=None,
                  class_ignore_index: int = -100, class_reduce=None, class_reduction: str = 'mean') -> None:
         super().__init__(interval_size_average, interval_reduce, interval_reduction, interval_beta)
 
         self.num_classes = num_classes
+        self.interval_weight = interval_weight
+
         self.class_loss = CrossEntropyLoss(class_weight, class_size_average, class_ignore_index, class_reduce,
                                            class_reduction)
 
@@ -40,4 +43,4 @@ class ICLoss(ILoss):
         interval_loss = super().forward(input_intervals[mask],
                                         target_intervals[mask]) if mask.any() else input_intervals.new_tensor(0.0)
 
-        return interval_loss + class_loss
+        return self.interval_weight * interval_loss + class_loss

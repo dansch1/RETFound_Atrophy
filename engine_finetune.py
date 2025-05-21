@@ -191,7 +191,7 @@ def evaluate_I(data_loader, model, device, args, epoch, mode, num_class, log_wri
 @torch.no_grad()
 def evaluate_IC(data_loader, model, device, args, epoch, mode, num_class, log_writer):
     """Evaluate the model."""
-    criterion = ICLoss(num_class)
+    criterion = ICLoss(num_class, args.interval_weight)
     metric_logger = misc.MetricLogger(delimiter="  ")
     os.makedirs(os.path.join(args.output_dir, args.task), exist_ok=True)
 
@@ -238,7 +238,7 @@ def evaluate_IC(data_loader, model, device, args, epoch, mode, num_class, log_wr
 
     class_score = (f1 + roc_auc + kappa) / 3
     intervall_score = iou
-    score = args.class_weight * class_score + (1 - args.class_weight) * intervall_score
+    score = args.interval_weight * class_score + (1 - args.interval_weight) * intervall_score
     if log_writer:
         for metric_name, value in zip(
                 ['accuracy', 'f1', 'roc_auc', 'hamming', 'jaccard', 'precision', 'recall', 'average_precision', 'kappa',
@@ -276,6 +276,10 @@ def iou_score(true_intervals, pred_intervals, input_size):
     iou_scores = []
 
     for (x0_true, x1_true), (x0_pred, x1_pred) in zip(true_intervals, pred_intervals):
+        # skip dummy intervals
+        if x0_true == x1_true == 0:
+            continue
+
         # sort intervals
         x0_true, x1_true = sorted([x0_true, x1_true])
         x0_pred, x1_pred = sorted([x0_pred, x1_pred])

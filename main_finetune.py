@@ -153,7 +153,7 @@ def get_args_parser():
 
     parser.add_argument('--annotations', type=str, help='annotations path')
     parser.add_argument('--max_intervals', default=10, type=int, help='number of intervals predicted by the model')
-    parser.add_argument('--class_weight', default=0.5, type=float, help='weight for class score')
+    parser.add_argument('--interval_weight', default=0.1, type=float, help='weight for interval loss/score')
 
     return parser
 
@@ -210,11 +210,7 @@ def main(args, criterion):
         checkpoint = torch.load(checkpoint_path, map_location='cpu')
         print("Load pre-trained checkpoint from: %s" % args.finetune)
 
-        if args.model != 'RETFound_mae':
-            checkpoint_model = checkpoint['teacher']
-        else:
-            checkpoint_model = checkpoint['model']
-
+        checkpoint_model = checkpoint['model']
         checkpoint_model = {k.replace("backbone.", ""): v for k, v in checkpoint_model.items()}
         checkpoint_model = {k.replace("mlp.w12.", "mlp.fc1."): v for k, v in checkpoint_model.items()}
         checkpoint_model = {k.replace("mlp.w3.", "mlp.fc2."): v for k, v in checkpoint_model.items()}
@@ -429,7 +425,7 @@ if __name__ == '__main__':
     if args.model == "I_detector":
         criterion = ILoss()
     elif args.model == "IC_detector":
-        criterion = ICLoss(args.nb_classes)
+        criterion = ICLoss(args.nb_classes, args.interval_weight)
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
