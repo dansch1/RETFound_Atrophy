@@ -179,48 +179,13 @@ def evaluate_I(data_loader, model, device, args, epoch, mode, num_class, log_wri
         true_intervals.extend(target.reshape(-1, 2).cpu().detach().numpy())
         pred_intervals.extend(output.reshape(-1, 2).cpu().detach().numpy())
 
-    iou = iou_interval(true_intervals, pred_intervals)
+    iou = iou_score(true_intervals, pred_intervals, args.input_size)
     print(f'Interval IoU: {iou}')
 
     print(f'val loss: {metric_logger.meters["loss"].global_avg}')
     metric_logger.synchronize_between_processes()
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, iou
-
-
-def misc_measures(confusion_matrix):
-    acc = []
-    sensitivity = []
-    specificity = []
-    precision = []
-    G = []
-    F1_score_2 = []
-    mcc_ = []
-
-    for i in range(1, confusion_matrix.shape[0]):
-        cm1 = confusion_matrix[i]
-        acc.append(1. * (cm1[0, 0] + cm1[1, 1]) / np.sum(cm1))
-        sensitivity_ = 1. * cm1[1, 1] / (cm1[1, 0] + cm1[1, 1])
-        sensitivity.append(sensitivity_)
-        specificity_ = 1. * cm1[0, 0] / (cm1[0, 1] + cm1[0, 0])
-        specificity.append(specificity_)
-        precision_ = 1. * cm1[1, 1] / (cm1[1, 1] + cm1[0, 1])
-        precision.append(precision_)
-        G.append(np.sqrt(sensitivity_ * specificity_))
-        F1_score_2.append(2 * precision_ * sensitivity_ / (precision_ + sensitivity_))
-        mcc = (cm1[0, 0] * cm1[1, 1] - cm1[0, 1] * cm1[1, 0]) / np.sqrt(
-            (cm1[0, 0] + cm1[0, 1]) * (cm1[0, 0] + cm1[1, 0]) * (cm1[1, 1] + cm1[1, 0]) * (cm1[1, 1] + cm1[0, 1]))
-        mcc_.append(mcc)
-
-    acc = np.array(acc).mean()
-    sensitivity = np.array(sensitivity).mean()
-    specificity = np.array(specificity).mean()
-    precision = np.array(precision).mean()
-    G = np.array(G).mean()
-    F1_score_2 = np.array(F1_score_2).mean()
-    mcc_ = np.array(mcc_).mean()
-
-    return acc, sensitivity, specificity, precision, G, F1_score_2, mcc_
 
 
 @torch.no_grad()
@@ -268,7 +233,7 @@ def evaluate_IC(data_loader, model, device, args, epoch, mode, num_class, log_wr
     precision = precision_score(true_onehot, pred_onehot, zero_division=0, average='macro')
     recall = recall_score(true_onehot, pred_onehot, zero_division=0, average='macro')
 
-    iou = iou_interval(true_intervals, pred_intervals)
+    iou = iou_score(true_intervals, pred_intervals, args.input_size)
     print(f'Interval IoU: {iou}')
 
     class_score = (f1 + roc_auc + kappa) / 3
@@ -307,27 +272,41 @@ def evaluate_IC(data_loader, model, device, args, epoch, mode, num_class, log_wr
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, score
 
 
-def iou_interval(true_intervals, pred_intervals):
+def iou_score(true_intervals, pred_intervals, input_size):
     iou_scores = []
 
     for (x0_true, x1_true), (x0_pred, x1_pred) in zip(true_intervals, pred_intervals):
+        # skip fully padded entries
         if x0_true < 0 and x1_true < 0 and x0_pred < 0 and x1_pred < 0:
             iou_scores.append(1.0)
             continue
 
-        if (x0_true < 0 or x1_true < 0) or (x0_pred < 0 or x1_pred < 0):
+        # sort intervals
+        x0_true, x1_true = sorted([x0_true, x1_true])
+        x0_pred, x1_pred = sorted([x0_pred, x1_pred])
+
+        # clamp to valid range
+        x0_true = max(0, min(x0_true, input_size))
+        x1_true = max(0, min(x1_true, input_size))
+        x0_pred = max(0, min(x0_pred, input_size))
+        x1_pred = max(0, min(x1_pred, input_size))
+
+        # check for empty or invalid intervals after clamp
+        if x1_true <= x0_true or x1_pred <= x0_pred:
             iou_scores.append(0.0)
             continue
 
+        # compute IoU
         intersection = max(0, min(x1_true, x1_pred) - max(x0_true, x0_pred))
         union = (x1_true - x0_true) + (x1_pred - x0_pred) - intersection
-        iou = intersection / union if union > 0 else 0
+
+        iou = intersection / union if union > 0 else 0.0
         iou_scores.append(iou)
 
-    return np.mean(iou_scores)
+    return np.mean(iou_scores) if iou_scores else 0.0
 
 
-def MAE_interval(true_interval_list, prediction_interval_list):
+def MAE_score(true_interval_list, prediction_interval_list):
     true_interval_array = np.array(true_interval_list)
     prediction_interval_array = np.array(prediction_interval_list)
 
