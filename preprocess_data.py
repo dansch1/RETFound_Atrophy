@@ -1,7 +1,10 @@
 import os
 
-from PIL import Image
+from PIL import Image, ImageOps
 import argparse
+
+from torchvision.transforms import transforms
+import torchvision.transforms.functional as TF
 
 
 def load_images(org_path):
@@ -29,10 +32,13 @@ def crop_images(images, offset, org_size):
 def resize_images(images, new_size):
     result = []
 
-    width, height = new_size
+    transform = transforms.Compose([
+        transforms.Lambda(lambda img: ImageOps.pad(img, new_size, color=(0, 0, 0))),  # schwarzes Padding
+        transforms.ToTensor()
+    ])
 
     for path, name, image in images:
-        result.append((path, name, image.resize((width, height), Image.LANCZOS)))
+        result.append((path, name, TF.to_pil_image(transform(image))))
 
     return result
 

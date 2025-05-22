@@ -36,7 +36,7 @@ def prepare_model(args):
     return model
 
 
-def evaluate(x, model, image, annotations, args):
+def evaluate(x, model, image, args, annotations=None):
     with torch.no_grad():
         output = model(x)
 
@@ -46,13 +46,16 @@ def evaluate(x, model, image, annotations, args):
     pred_label = output_label.squeeze(0).detach().cpu().numpy()
 
     image_path = pathlib.Path(image)
-    true_label = 0 if image_path.name in annotations else 1
-
     print(f"Class results for {image_path}: {output_} -> {pred_label} ({'Atrophy' if pred_label == 0 else 'Normal'})")
+
+    if not annotations:
+        return
+
+    true_label = 0 if image_path.name in annotations else 1
     print(f"Correct class is: {true_label} ({'Atrophy' if true_label == 0 else 'Normal'})")
 
 
-def evaluate_I(x, model, image, annotations, args):
+def evaluate_I(x, model, image, args, annotations=None):
     with torch.no_grad():
         output = model(x)
 
@@ -63,20 +66,27 @@ def evaluate_I(x, model, image, annotations, args):
     prediction = [interval + [0] for interval in pred_intervals]  # add atrophy class
 
     image_path = pathlib.Path(image)
-    target = annotations.get(image_path.name, [])
-
     print(f"Prediction for {image_path}: {output_} -> {prediction}")
-    print(f"Correct are: {target}")
 
     num_classes = args.nb_classes
     output_dir = args.output_dir
-    draw_results(image_path=image_path, results=prediction, num_classes=num_classes,
-                 output_dir=output_dir, tag="prediction")
-    draw_results(image_path=image_path, results=target, num_classes=num_classes,
-                 output_dir=output_dir, tag="target")
+
+    if args.draw:
+        draw_results(image_path=image_path, results=prediction, num_classes=num_classes,
+                     output_dir=output_dir, tag="prediction")
+
+    if not annotations:
+        return
+
+    target = annotations.get(image_path.name, [])
+    print(f"Correct are: {target}")
+
+    if args.draw:
+        draw_results(image_path=image_path, results=target, num_classes=num_classes,
+                     output_dir=output_dir, tag="target")
 
 
-def evaluate_IC(x, model, image, annotations, args):
+def evaluate_IC(x, model, image, args, annotations=None):
     num_classes = args.nb_classes
 
     with torch.no_grad():
@@ -92,16 +102,23 @@ def evaluate_IC(x, model, image, annotations, args):
     prediction = prediction_.cpu().detach().tolist()
 
     image_path = pathlib.Path(image)
-    target = annotations.get(image_path.name, [])
-
     print(f"Prediction for {image_path}: {output_} -> {prediction}")
-    print(f"Correct are: {target}")
 
     output_dir = args.output_dir
-    draw_results(image_path=image_path, results=prediction, num_classes=num_classes,
-                 output_dir=output_dir, tag="prediction")
-    draw_results(image_path=image_path, results=target, num_classes=num_classes,
-                 output_dir=output_dir, tag="target")
+
+    if args.draw:
+        draw_results(image_path=image_path, results=prediction, num_classes=num_classes,
+                     output_dir=output_dir, tag="prediction")
+
+    if not annotations:
+        return
+
+    target = annotations.get(image_path.name, [])
+    print(f"Correct are: {target}")
+
+    if args.draw:
+        draw_results(image_path=image_path, results=target, num_classes=num_classes,
+                     output_dir=output_dir, tag="target")
 
 
 def draw_results(image_path, results, num_classes, output_dir, tag):
@@ -144,7 +161,8 @@ if __name__ == '__main__':
     parser.add_argument("--nb_classes", type=int, default=2)
     parser.add_argument("--max_intervals", type=int, default=10)
     parser.add_argument("--resume", type=str)
-    parser.add_argument("--annotations", type=str)
+    parser.add_argument("--annotations", type=str, default=None)
+    parser.add_argument("--draw", type=bool, default=False)
     parser.add_argument('--output_dir', default='./results',
                         help='path where to save results')
 
@@ -177,4 +195,4 @@ if __name__ == '__main__':
         x = x.to(device, non_blocking=True)
 
         # evaluate model with image
-        eval_fn(x=x, model=model, image=image, annotations=annotations, args=args)
+        eval_fn(x=x, model=model, image=image, args=args, annotations=annotations)
