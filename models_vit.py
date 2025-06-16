@@ -68,6 +68,7 @@ class ICDetector(VisionTransformer):
     def __init__(self, max_intervals, **kwargs):
         super().__init__(**kwargs)
 
+        self.img_size = kwargs['img_size']
         self.max_intervals = max_intervals
         # (x0, x1) + num_classes for each interval
         self.head = nn.Linear(self.embed_dim, (2 + self.num_classes) * self.max_intervals)
@@ -78,6 +79,7 @@ class ICDetector(VisionTransformer):
         preds = self.head(x).squeeze(1)  # shape: (batch_size, max_intervals * (2 + num_classes))
 
         interval_preds = preds[:, :self.max_intervals * 2].view(-1, self.max_intervals, 2)
+        interval_preds = torch.sigmoid(interval_preds) * self.img_size
         class_preds = preds[:, self.max_intervals * 2:].view(-1, self.max_intervals, self.num_classes)
 
         return interval_preds, class_preds
