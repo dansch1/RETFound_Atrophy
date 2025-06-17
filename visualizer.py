@@ -98,7 +98,7 @@ def evaluate_IC(x, model, image, args, annotations=None):
     interval_pred_ = interval_pred.reshape(-1, 2)
 
     output_ = torch.cat(tensors=(interval_pred_, output_label.unsqueeze(1)), dim=1)
-    prediction_ = output_[(output_[:, 0] >= 0) & (output_[:, 1] >= 0)]  # remove dummy intervals
+    prediction_ = output_[(output_[:, 0] >= 0) & (output_[:, 1] >= 0) & (output_[:, 2] != 0)]  # remove dummy intervals
     prediction = prediction_.cpu().detach().tolist()
 
     image_path = pathlib.Path(image)
@@ -129,6 +129,9 @@ def draw_results(image_path, results, num_classes, output_dir, tag):
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     for i, (x0, x1, cls) in enumerate(results):
+        if cls == 0:
+            continue
+
         lower, upper = min(x0, x1), max(x0, x1)
 
         # draw bbox
@@ -162,7 +165,7 @@ if __name__ == '__main__':
     parser.add_argument("--max_intervals", type=int, default=10)
     parser.add_argument("--resume", type=str)
     parser.add_argument("--annotations", type=str, default=None)
-    parser.add_argument("--draw", type=bool, default=False)
+    parser.add_argument("--draw", action='store_true')
     parser.add_argument('--output_dir', default='./results',
                         help='path where to save results')
 
