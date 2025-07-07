@@ -3,8 +3,11 @@ import json
 import os
 import pathlib
 
+import cv2
+import numpy as np
 import torch
 from PIL import Image, ImageDraw
+from scipy.interpolate import UnivariateSpline
 from torch import nn
 
 import models_vit
@@ -121,25 +124,125 @@ def evaluate_IC(x, model, image, args, annotations=None):
                      output_dir=output_dir, tag="target")
 
 
-def draw_results(image_path, results, num_classes, output_dir, tag):
+def draw_results(image_path, results, num_classes, output_dir, tag, line_width=4):
     image = Image.open(image_path)
     draw = ImageDraw.Draw(image)
 
     # create output directory if necessary
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
 
+    # get segmentation
+    upper_line, lower_line = segment_oct_layers(image_path)
+
     for i, (x0, x1, cls) in enumerate(results):
         if cls == 0:
             continue
 
-        lower, upper = min(x0, x1), max(x0, x1)
+        x0, x1 = sorted((max(x0, 0), min(x1, image.width - 1)))
+        color = CLASS_COLORS[num_classes][cls]
 
-        # draw bbox
-        draw.rectangle(xy=((max(lower, 0), 0), (min(upper, image.width - 1), image.height - 1)),
-                       outline=CLASS_COLORS[num_classes][cls], width=4)
+        # draw vertical lines
+        for x in (x0, x1):
+            y_upper = upper_line[x] if not np.isnan(upper_line[x]) else image.height - 1
+            y_lower = lower_line[x] if not np.isnan(lower_line[x]) else 0
+            draw.line([(x, y_upper), (x, y_lower)], fill=color, width=line_width)
+
+        # draw horizontal lines
+        upper_points = [(x, upper_line[x]) for x in range(x0, x1 + 1) if not np.isnan(upper_line[x])]
+        lower_points = [(x, lower_line[x]) for x in range(x0, x1 + 1) if not np.isnan(lower_line[x])]
+
+        if len(upper_points) < 2:
+            upper_points = [(x0, image.height - 1), (x1, image.height - 1)]
+        if len(lower_points) < 2:
+            upper_points = [(x0, 0), (x1, 0)]
+
+        for points in (upper_points, lower_points):
+            draw.line(points, fill=color, width=line_width)
 
     # save annotated image
     image.save(os.path.join(output_dir, f"{image_path.stem}_{tag}{image_path.suffix}"))
+
+
+def segment_oct_layers(image_path):
+    """
+    Segments the uppermost and lowermost retinal layers from an OCT B-scan.
+
+    Parameters:
+        image_path (str): Path to the OCT image file.
+
+    Returns:
+        upper_line (np.ndarray): Y-coordinates of the upper retinal layer.
+        lower_line (np.ndarray): Y-coordinates of the lower retinal layer.
+    """
+
+    # step 0: load image
+    oct_image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+
+    # step 1: preprocessing
+    denoised = cv2.GaussianBlur(oct_image, (5, 5), 0)
+    brightened = cv2.add(denoised, 70)
+    filled = cv2.morphologyEx(brightened, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    smoothed = cv2.GaussianBlur(filled, (9, 9), 3)
+    _, binary = cv2.threshold(smoothed, 140, 255, cv2.THRESH_BINARY)
+
+    # step 2: morphological operations
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 3))
+    opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=3)
+    dilated = cv2.dilate(opened, np.ones((1, 2), np.uint8), iterations=2)
+
+    # step 3: largest connected component
+    contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    largest = sorted(contours, key=cv2.contourArea, reverse=True)[:1]
+    mask = np.zeros_like(dilated)
+    cv2.drawContours(mask, largest, -1, 255, thickness=cv2.FILLED)
+
+    # step 4: edge detection
+    edges = cv2.Canny(mask, 100, 200)
+
+    # step 5: find upper and lower edges
+    upper_y = []
+    lower_y = []
+
+    for col in range(edges.shape[1]):
+        rows = np.where(edges[:, col] > 0)[0]
+
+        if len(rows) > 0:
+            upper_y.append(min(rows))
+            lower_y.append(max(rows))
+        else:
+            upper_y.append(np.nan)
+            lower_y.append(np.nan)
+
+    # step 6: smoothing
+    x = np.arange(len(upper_y))
+    upper_y = np.array(upper_y, dtype=np.float64)
+    lower_y = np.array(lower_y, dtype=np.float64)
+
+    valid_upper = ~np.isnan(upper_y)
+    valid_lower = ~np.isnan(lower_y)
+
+    start_u = np.argmax(valid_upper)
+    end_u = len(valid_upper) - np.argmax(valid_upper[::-1]) - 1
+    start_l = np.argmax(valid_lower)
+    end_l = len(valid_lower) - np.argmax(valid_lower[::-1]) - 1
+
+    x_u = x[start_u:end_u + 1]
+    y_u = upper_y[start_u:end_u + 1]
+    x_l = x[start_l:end_l + 1]
+    y_l = lower_y[start_l:end_l + 1]
+
+    upper_line = np.full_like(upper_y, np.nan)
+    lower_line = np.full_like(lower_y, np.nan)
+
+    if np.sum(~np.isnan(y_u)) > 5:
+        s_upper = UnivariateSpline(x_u[~np.isnan(y_u)], y_u[~np.isnan(y_u)], s=300)
+        upper_line[start_u:end_u + 1] = s_upper(x_u)
+
+    if np.sum(~np.isnan(y_l)) > 5:
+        s_lower = UnivariateSpline(x_l[~np.isnan(y_l)], y_l[~np.isnan(y_l)], s=300)
+        lower_line[start_l:end_l + 1] = s_lower(x_l)
+
+    return upper_line, lower_line
 
 
 def get_all_files(data_path):
