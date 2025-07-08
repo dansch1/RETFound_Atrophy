@@ -76,7 +76,7 @@ def evaluate_I(x, model, image, args, annotations=None):
 
     if args.draw:
         draw_results(image_path=image_path, results=prediction, num_classes=num_classes,
-                     output_dir=output_dir, tag="prediction")
+                     output_dir=output_dir, tag="prediction", segment_layers=True)
 
     if not annotations:
         return
@@ -86,7 +86,7 @@ def evaluate_I(x, model, image, args, annotations=None):
 
     if args.draw:
         draw_results(image_path=image_path, results=target, num_classes=num_classes,
-                     output_dir=output_dir, tag="target")
+                     output_dir=output_dir, tag="target", segment_layers=False)
 
 
 def evaluate_IC(x, model, image, args, annotations=None):
@@ -111,7 +111,7 @@ def evaluate_IC(x, model, image, args, annotations=None):
 
     if args.draw:
         draw_results(image_path=image_path, results=prediction, num_classes=num_classes,
-                     output_dir=output_dir, tag="prediction")
+                     output_dir=output_dir, tag="prediction", segment_layers=True)
 
     if not annotations:
         return
@@ -121,10 +121,10 @@ def evaluate_IC(x, model, image, args, annotations=None):
 
     if args.draw:
         draw_results(image_path=image_path, results=target, num_classes=num_classes,
-                     output_dir=output_dir, tag="target")
+                     output_dir=output_dir, tag="target", segment_layers=False)
 
 
-def draw_results(image_path, results, num_classes, output_dir, tag, line_width=4):
+def draw_results(image_path, results, num_classes, output_dir, tag, segment_layers, line_width=4):
     image = Image.open(image_path)
     draw = ImageDraw.Draw(image)
 
@@ -132,24 +132,26 @@ def draw_results(image_path, results, num_classes, output_dir, tag, line_width=4
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     # get segmentation
-    upper_line, lower_line = segment_oct_layers(image_path)
+    upper_line, lower_line = segment_oct_layers(str(image_path)) if segment_layers else ([], [])
 
     for i, (x0, x1, cls) in enumerate(results):
         if cls == 0:
             continue
 
-        x0, x1 = sorted((max(x0, 0), min(x1, image.width - 1)))
+        x0, x1 = sorted((max(int(x0), 0), min(int(x1), image.width - 1)))
         color = CLASS_COLORS[num_classes][cls]
 
         # draw vertical lines
         for x in (x0, x1):
-            y_upper = upper_line[x] if not np.isnan(upper_line[x]) else image.height - 1
-            y_lower = lower_line[x] if not np.isnan(lower_line[x]) else 0
+            y_upper = upper_line[x] if x < len(upper_line) and not np.isnan(upper_line[x]) else image.height - 1
+            y_lower = lower_line[x] if x < len(lower_line) and not np.isnan(lower_line[x]) else 0
             draw.line([(x, y_upper), (x, y_lower)], fill=color, width=line_width)
 
         # draw horizontal lines
-        upper_points = [(x, upper_line[x]) for x in range(x0, x1 + 1) if not np.isnan(upper_line[x])]
-        lower_points = [(x, lower_line[x]) for x in range(x0, x1 + 1) if not np.isnan(lower_line[x])]
+        upper_points = [(x, upper_line[x]) for x in range(x0, x1 + 1) if
+                        x < len(upper_line) and not np.isnan(upper_line[x])]
+        lower_points = [(x, lower_line[x]) for x in range(x0, x1 + 1) if
+                        x < len(lower_line) and not np.isnan(lower_line[x])]
 
         if len(upper_points) < 2:
             upper_points = [(x0, image.height - 1), (x1, image.height - 1)]
