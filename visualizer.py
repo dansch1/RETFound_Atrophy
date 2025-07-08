@@ -154,9 +154,9 @@ def draw_results(image_path, results, num_classes, output_dir, tag, segment_laye
                         x < len(lower_line) and not np.isnan(lower_line[x])]
 
         if len(upper_points) < 2:
-            upper_points = [(x0, image.height - 1), (x1, image.height - 1)]
-        if len(lower_points) < 2:
             upper_points = [(x0, 0), (x1, 0)]
+        if len(lower_points) < 2:
+            lower_points = [(x0, image.height - 1), (x1, image.height - 1)]
 
         for points in (upper_points, lower_points):
             draw.line(points, fill=color, width=line_width)
