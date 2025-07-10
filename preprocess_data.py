@@ -139,19 +139,20 @@ def augment_images(images, new_size, annotations, aug_config=None):
 
 
 def save_images(splits, new_path, annotations, format):
-    setup_output_dir(new_path)
+    output_dir = os.path.join(new_path, "splits")
+    setup_output_dir(output_dir)
 
     for split_name, split_images in splits.items():
-        phase_path = os.path.join(new_path, split_name)
+        split_path = os.path.join(output_dir, split_name)
 
-        if not os.path.exists(phase_path):
-            os.makedirs(phase_path)
+        if not os.path.exists(split_path):
+            os.makedirs(split_path)
 
         for image, filename in split_images:
             intervals = annotations.get(filename, [])
             max_cls = "0" if not intervals or len(intervals) == 0 else str(max(interval[2] for interval in intervals))
 
-            cls_path = os.path.join(phase_path, max_cls)
+            cls_path = os.path.join(split_path, max_cls)
 
             if not os.path.exists(cls_path):
                 os.makedirs(cls_path)
@@ -160,15 +161,15 @@ def save_images(splits, new_path, annotations, format):
             image.save(os.path.join(cls_path, new_filename))
 
 
-def setup_output_dir(new_path):
+def setup_output_dir(output_dir):
     # create output dir if necessary
-    if not os.path.exists(new_path):
-        os.makedirs(new_path)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
         return
 
     # clear all files in the output dir
-    for f in os.listdir(new_path):
-        file_path = os.path.join(new_path, f)
+    for f in os.listdir(output_dir):
+        file_path = os.path.join(output_dir, f)
 
         try:
             if os.path.isfile(file_path) or os.path.islink(file_path):
