@@ -23,7 +23,7 @@ def load_annotations(annotations):
     return etree.parse(annotations).getroot()
 
 
-def get_targets(images, annotations, num_classes, x_offset):
+def combine_annotations(images, annotations, num_classes, x_offset):
     result = {}
 
     for path, name in images:
@@ -40,6 +40,9 @@ def get_targets(images, annotations, num_classes, x_offset):
 def get_class_intervals(image, annotations, num_classes):
     bboxes = annotations.findall(f"image[@name='{image}']/box")
     intervals = []
+
+    if len(bboxes) == 0:
+        return intervals
 
     for bbox in bboxes:
         # get start and end point
@@ -79,18 +82,28 @@ def combine_intervals(intervals):
     return result
 
 
+def save_annotations(annotations, output_path, prefix):
+    dir_name = os.path.dirname(output_path)
+    base_name = os.path.basename(output_path)
+    new_base_name = prefix + base_name
+    new_path = os.path.join(dir_name, new_base_name)
+
+    with open(new_path, "w") as f:
+        json.dump(annotations, f, indent=4)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str)
     parser.add_argument("--annotations", type=str)
     parser.add_argument("--num_classes", type=int, default=2)
     parser.add_argument("--x_offset", type=int, default=496)
-    parser.add_argument("--output_path", type=str, default="annotations.json")
+    parser.add_argument("--output_path", type=str)
     args = parser.parse_args()
 
     images = load_images(args.data_path)
     annotations = load_annotations(args.annotations)
-    targets = get_targets(images=images, annotations=annotations, num_classes=args.num_classes, x_offset=args.x_offset)
 
-    with open(f"{args.num_classes}c_" + args.output_path, "w") as f:
-        json.dump(targets, f, indent=4)
+    new_annotations = combine_annotations(images=images, annotations=annotations, num_classes=args.num_classes,
+                                          x_offset=args.x_offset)
+    save_annotations(annotations=new_annotations, output_path=args.output_path, prefix=f"{args.num_classes}c_")
