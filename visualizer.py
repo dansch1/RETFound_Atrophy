@@ -75,7 +75,7 @@ def evaluate_I(x, model, image, args, annotations=None):
     output_dir = args.output_dir
 
     if args.draw:
-        draw_results(image_path=image_path, results=prediction, num_classes=num_classes,
+        draw_results(image_path=image_path, input_size=args.input_size, results=prediction, num_classes=num_classes,
                      output_dir=output_dir, tag="prediction", segment_layers=True)
 
     if not annotations:
@@ -85,7 +85,7 @@ def evaluate_I(x, model, image, args, annotations=None):
     print(f"Correct are: {target}")
 
     if args.draw:
-        draw_results(image_path=image_path, results=target, num_classes=num_classes,
+        draw_results(image_path=image_path, input_size=args.input_size, results=target, num_classes=num_classes,
                      output_dir=output_dir, tag="target", segment_layers=False)
 
 
@@ -110,7 +110,7 @@ def evaluate_IC(x, model, image, args, annotations=None):
     output_dir = args.output_dir
 
     if args.draw:
-        draw_results(image_path=image_path, results=prediction, num_classes=num_classes,
+        draw_results(image_path=image_path, input_size=args.input_size, results=prediction, num_classes=num_classes,
                      output_dir=output_dir, tag="prediction", segment_layers=True)
 
     if not annotations:
@@ -120,13 +120,13 @@ def evaluate_IC(x, model, image, args, annotations=None):
     print(f"Correct are: {target}")
 
     if args.draw:
-        draw_results(image_path=image_path, results=target, num_classes=num_classes,
+        draw_results(image_path=image_path, input_size=args.input_size, results=target, num_classes=num_classes,
                      output_dir=output_dir, tag="target", segment_layers=False)
 
 
-def draw_results(image_path, results, num_classes, output_dir, tag, segment_layers, line_width=4):
+def draw_results(image_path, input_size, results, num_classes, output_dir, tag, segment_layers, line_width=4):
     image = Image.open(image_path)
-    draw = ImageDraw.Draw(image)
+    scale_factor = image.width / input_size
 
     # create output directory if necessary
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -134,11 +134,20 @@ def draw_results(image_path, results, num_classes, output_dir, tag, segment_laye
     # get segmentation
     upper_line, lower_line = segment_oct_layers(str(image_path)) if segment_layers else ([], [])
 
+    # draw result
+    draw = ImageDraw.Draw(image)
+
     for i, (x0, x1, cls) in enumerate(results):
         if cls == 0:
             continue
 
-        x0, x1 = sorted((max(int(x0), 0), min(int(x1), image.width - 1)))
+        x0, x1 = sorted((x0, x1))
+
+        x0 *= scale_factor
+        x1 *= scale_factor
+
+        x0, x1 = max(x0, 0), min(x1, image.width - 1)
+
         color = CLASS_COLORS[num_classes][cls]
 
         # draw vertical lines
@@ -261,7 +270,7 @@ if __name__ == '__main__':
     # parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str)
-    parser.add_argument("--input_size", type=int, default=224)
+    parser.add_argument("--input_size", type=int, default=512)
     parser.add_argument('--device', default='cuda',
                         help='device to use for testing')
     parser.add_argument("--model", type=str, default="RETFound_mae",

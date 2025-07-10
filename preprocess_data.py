@@ -1,6 +1,11 @@
+import json
 import os
+import random
+import shutil
+import warnings
 
-from PIL import Image, ImageOps
+import numpy as np
+from PIL import Image, ImageOps, ImageFilter
 import argparse
 
 from torchvision.transforms import transforms
@@ -10,61 +15,206 @@ import torchvision.transforms.functional as TF
 def load_images(org_path):
     result = []
 
-    for path, subdirs, files in os.walk(org_path):
-        for name in files:
-            result.append((path, name, Image.open(os.path.join(path, name))))
+    for filename in os.listdir(org_path):
+        path = os.path.join(org_path, filename)
+        result.append((Image.open(path), filename))
 
     return result
+
+
+def load_annotations(annotations_path, decimal_places=3):
+    with open(args.annotations) as f:
+        annotations = json.loads(f.read())
+
+    # round intervals
+    return {filename: [[round(x0, decimal_places), round(x1, decimal_places), c] for [x0, x1, c] in intervals] for
+            filename, intervals in annotations.items()}
 
 
 def crop_images(images, offset, org_size):
     result = []
 
     x_offset, y_offset = offset
-    width, height = org_size
 
-    for path, name, image in images:
-        result.append((path, name, image.crop((x_offset, y_offset, x_offset + width, y_offset + height))))
+    for image, filename in images:
+        result.append((image.crop((x_offset, y_offset, x_offset + org_size, y_offset + org_size)), filename))
 
     return result
 
 
-def resize_images(images, new_size):
+def scale_images(images, org_size, new_size, annotations):
     result = []
 
     transform = transforms.Compose([
-        transforms.Lambda(lambda img: ImageOps.pad(img, new_size, color=(0, 0, 0))),  # schwarzes Padding
+        transforms.Lambda(lambda img: ImageOps.pad(img, (new_size, new_size), color=(0, 0, 0))),
         transforms.ToTensor()
     ])
 
-    for path, name, image in images:
-        result.append((path, name, TF.to_pil_image(transform(image))))
+    # scale images
+    for image, filename in images:
+        result.append((TF.to_pil_image(transform(image)), filename))
 
-    return result
+    scale_factor = float(new_size) / org_size
+    new_annotations = {filename: [[x0 * scale_factor, x1 * scale_factor, c] for [x0, x1, c] in intervals] for
+                       filename, intervals in annotations.items()}
+
+    return result, new_annotations
 
 
-def save_images(images, org_path, new_path, format):
-    for path, name, image in images:
-        save_path = path.replace(org_path, new_path)
+def split_images(images, train_ratio, val_ratio, test_ratio):
+    assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6, "Ratios must sum to 1"
 
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
+    random.shuffle(images)
 
-        save_name = f"{os.path.splitext(name)[0]}.{format}"
-        image.save(os.path.join(save_path, save_name))
+    total = len(images)
+    train_end = int(train_ratio * total)
+    val_end = train_end + int(val_ratio * total)
+
+    splits = {
+        "train": images[:train_end],
+        "val": images[train_end:val_end],
+        "test": images[val_end:]
+    }
+
+    return splits
+
+
+def apply_flip(image, intervals, width, decimal_places=3):
+    flipped_image = image.transpose(Image.FLIP_LEFT_RIGHT)
+    flipped_annots = [[round(width - x1, decimal_places), round(width - x0, decimal_places), cls] for [x0, x1, cls] in
+                      intervals] if intervals else None
+
+    return flipped_image, flipped_annots, "_flip"
+
+
+def apply_noise(image, intervals, **kwargs):
+    noisy = np.array(image).astype(np.float32)
+    noise = np.random.normal(0, 5, noisy.shape)
+    noisy = np.clip(noisy + noise, 0, 255).astype(np.uint8)
+    noisy_image = Image.fromarray(noisy)
+
+    return noisy_image, intervals, "_noise"
+
+
+def apply_blur(img, intervals, **kwargs):
+    blurred = img.filter(ImageFilter.GaussianBlur(radius=1))
+
+    return blurred, intervals, "_blur"
+
+
+def augment_images(images, new_size, annotations, aug_config=None):
+    result = images.copy()
+    new_annotations = annotations.copy()
+
+    if aug_config is None:
+        aug_config = {
+            apply_flip: 0.5,
+            apply_noise: 0.3,
+            # apply_blur: 0.2,
+        }
+
+    for image, filename in images:
+        intervals = annotations.get(filename, None)
+        image_variants = [(image, intervals, "")]
+
+        for aug_func, prob in aug_config.items():
+            next_variants = []
+
+            for image_var, intervals_var, suffix_var in image_variants:
+                if random.random() < prob:
+                    aug_image, aug_intervals, aug_suffix = aug_func(image_var, intervals_var, width=new_size)
+                    new_suffix = suffix_var + aug_suffix
+                    next_variants.append((aug_image, aug_intervals, new_suffix))
+
+            image_variants.extend(next_variants)
+
+        base_name, extension = os.path.splitext(filename)
+
+        for aug_image, aug_intervals, aug_suffix in image_variants[1:]:  # skip original
+            new_filename = f"{base_name}{aug_suffix}{extension}"
+            result.append((aug_image, new_filename))
+
+            if aug_intervals:
+                new_annotations[new_filename] = aug_intervals
+
+    return result, new_annotations
+
+
+def save_images(splits, new_path, annotations, format):
+    setup_output_dir(new_path)
+
+    for split_name, split_images in splits.items():
+        phase_path = os.path.join(new_path, split_name)
+
+        if not os.path.exists(phase_path):
+            os.makedirs(phase_path)
+
+        for image, filename in split_images:
+            intervals = annotations.get(filename, [])
+            max_cls = "0" if not intervals or len(intervals) == 0 else str(max(interval[2] for interval in intervals))
+
+            cls_path = os.path.join(phase_path, max_cls)
+
+            if not os.path.exists(cls_path):
+                os.makedirs(cls_path)
+
+            new_filename = f"{os.path.splitext(filename)[0]}.{format}"
+            image.save(os.path.join(cls_path, new_filename))
+
+
+def setup_output_dir(new_path):
+    # create output dir if necessary
+    if not os.path.exists(new_path):
+        os.makedirs(new_path)
+        return
+
+    # clear all files in the output dir
+    for f in os.listdir(new_path):
+        file_path = os.path.join(new_path, f)
+
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            warnings.warn(f"Failed to delete {file_path}. Reason: {e}")
+
+
+def save_annotations(annotations, filename="annotations.json"):
+    with open(os.path.join(args.new_path, filename), "w") as f:
+        json.dump(annotations, f, indent=4)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--org_path", type=str)
     parser.add_argument("--new_path", type=str)
+    parser.add_argument("--annotations", type=str)
     parser.add_argument("--format", type=str, default="png")
-    parser.add_argument("--org_size", type=tuple, default=(512, 512))
-    parser.add_argument("--new_size", type=tuple, default=(512, 512))
+    parser.add_argument("--org_size", type=int, default=512)
+    parser.add_argument("--new_size", type=int, default=512)
     parser.add_argument("--offset", type=tuple, default=(496, 0))
+    parser.add_argument("--train_ratio", type=float, default=0.8)
+    parser.add_argument("--val_ratio", type=float, default=0.1)
+    parser.add_argument("--test_ratio", type=float, default=0.1)
     args = parser.parse_args()
 
+    # loading
     org_images = load_images(args.org_path)
-    cropped_images = crop_images(images=org_images, offset=args.offset, org_size=args.org_size)
-    resized_images = resize_images(images=cropped_images, new_size=args.new_size)
-    save_images(images=resized_images, org_path=args.org_path, new_path=args.new_path, format=args.format)
+    annotations = load_annotations(args.annotations)
+
+    # preprocessing
+    images = crop_images(images=org_images, offset=args.offset, org_size=args.org_size)
+
+    images, annotations = scale_images(images=images, org_size=args.org_size, new_size=args.new_size,
+                                       annotations=annotations)
+
+    splits = split_images(images=images, train_ratio=args.train_ratio, val_ratio=args.val_ratio,
+                          test_ratio=args.test_ratio)
+
+    # splits["train"], annotations = augment_images(images=splits["train"], new_size=args.new_size, annotations=annotations)
+
+    # saving
+    save_images(splits=splits, new_path=args.new_path, annotations=annotations, format=args.format)
+    save_annotations(annotations)
