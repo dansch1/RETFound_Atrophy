@@ -31,10 +31,8 @@ def load_annotations(annotations_path, decimal_places=3):
             filename, intervals in annotations.items()}
 
 
-def crop_images(images, offset, org_size):
+def crop_images(images, x_offset, y_offset, org_size):
     result = []
-
-    x_offset, y_offset = offset
 
     for image, filename in images:
         result.append((image.crop((x_offset, y_offset, x_offset + org_size, y_offset + org_size)), filename))
@@ -194,7 +192,8 @@ if __name__ == "__main__":
     parser.add_argument("--format", type=str, default="png")
     parser.add_argument("--org_size", type=int, default=512)
     parser.add_argument("--new_size", type=int, default=512)
-    parser.add_argument("--offset", type=tuple, default=(496, 0))
+    parser.add_argument("--x_offset", type=int, default=496)
+    parser.add_argument("--y_offset", type=int, default=0)
     parser.add_argument("--train_ratio", type=float, default=0.8)
     parser.add_argument("--val_ratio", type=float, default=0.1)
     parser.add_argument("--test_ratio", type=float, default=0.1)
@@ -205,7 +204,7 @@ if __name__ == "__main__":
     annotations = load_annotations(args.annotations)
 
     # preprocessing
-    images = crop_images(images=org_images, offset=args.offset, org_size=args.org_size)
+    images = crop_images(images=org_images, x_offset=args.x_offset, y_offset=args.y_offset, org_size=args.org_size)
 
     images, annotations = scale_images(images=images, org_size=args.org_size, new_size=args.new_size,
                                        annotations=annotations)

@@ -84,7 +84,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_path", type=str)
     parser.add_argument("--annotations", type=str)
     parser.add_argument("--num_classes", type=int, default=2)
-    parser.add_argument("--x_offset", type=tuple, default=496)
+    parser.add_argument("--x_offset", type=int, default=496)
     parser.add_argument("--output_path", type=str, default="annotations.json")
     args = parser.parse_args()
 
