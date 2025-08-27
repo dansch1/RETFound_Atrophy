@@ -287,7 +287,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    # chose fine-tuned model from checkpoint
+    # chose and prepare fine-tuned model from checkpoint
     device = torch.device(args.device)
     model = prepare_model(args)
     model.to(device)
