@@ -146,7 +146,7 @@ def draw_results(image_path, input_size, results, num_classes, output_dir, tag, 
         x0 *= scale_factor
         x1 *= scale_factor
 
-        x0, x1 = max(x0, 0), min(x1, image.width - 1)
+        x0, x1 = max(int(x0), 0), min(int(x1), image.width - 1)
 
         color = CLASS_COLORS[num_classes][cls]
 
@@ -258,12 +258,14 @@ def segment_oct_layers(image_path):
 
 def get_all_files(data_path):
     path = pathlib.Path(data_path)
+
     if path.is_file():
         return [str(path.resolve())]
-    elif path.is_dir():
+
+    if path.is_dir():
         return [str(p.resolve()) for p in path.rglob("*") if p.is_file()]
-    else:
-        return []
+
+    return []
 
 
 if __name__ == '__main__':
@@ -290,8 +292,10 @@ if __name__ == '__main__':
     model = prepare_model(args)
     model.to(device)
 
-    with open(args.annotations) as f:
-        annotations = json.loads(f.read())
+    annotations = None
+    if args.annotations:
+        with open(args.annotations) as f:
+            annotations = json.loads(f.read())
 
     # get all images
     # supports single files or folders

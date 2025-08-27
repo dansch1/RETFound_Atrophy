@@ -8,27 +8,28 @@ import numpy as np
 from PIL import Image, ImageOps, ImageFilter
 import argparse
 
-from torchvision.transforms import transforms
-import torchvision.transforms.functional as TF
-
 
 def load_images(org_path):
     result = []
 
     for filename in os.listdir(org_path):
         path = os.path.join(org_path, filename)
-        result.append((Image.open(path), filename))
+
+        try:
+            result.append((Image.open(path), filename))
+        except Exception:
+            pass
 
     return result
 
 
 def load_annotations(annotations_path, decimal_places=3):
-    with open(args.annotations) as f:
+    with open(annotations_path) as f:
         annotations = json.loads(f.read())
 
     # round intervals
-    return {filename: [[round(x0, decimal_places), round(x1, decimal_places), c] for [x0, x1, c] in intervals] for
-            filename, intervals in annotations.items()}
+    return {filename: [[round(x0, decimal_places), round(x1, decimal_places), c] for [x0, x1, c] in intervals]
+            for filename, intervals in annotations.items()}
 
 
 def crop_images(images, x_offset, y_offset, org_size):
@@ -43,18 +44,25 @@ def crop_images(images, x_offset, y_offset, org_size):
 def scale_images(images, org_size, new_size, annotations):
     result = []
 
-    transform = transforms.Compose([
-        transforms.Lambda(lambda img: ImageOps.pad(img, (new_size, new_size), color=(0, 0, 0))),
-        transforms.ToTensor()
-    ])
-
-    # scale images
     for image, filename in images:
-        result.append((TF.to_pil_image(transform(image)), filename))
+        w, h = image.size
 
-    scale_factor = float(new_size) / org_size
-    new_annotations = {filename: [[x0 * scale_factor, x1 * scale_factor, c] for [x0, x1, c] in intervals] for
-                       filename, intervals in annotations.items()}
+        # step 1: padding
+        if h < w:
+            missing = w - h
+            pad_top = missing // 2
+            pad_bottom = missing - pad_top
+            image = ImageOps.expand(image, border=(0, pad_top, 0, pad_bottom), fill=(0, 0, 0))
+
+        # step 2: scaling
+        if image.size != (new_size, new_size):
+            image = image.resize((new_size, new_size), Image.BILINEAR)
+
+        result.append((image, filename))
+
+    scale_factor = float(new_size) / float(org_size)
+    new_annotations = {filename: [[x0 * scale_factor, x1 * scale_factor, c] for [x0, x1, c] in intervals]
+                       for filename, intervals in annotations.items()}
 
     return result, new_annotations
 
@@ -77,10 +85,70 @@ def split_images(images, train_ratio, val_ratio, test_ratio):
     return splits
 
 
+def parse_patient_id(filename: str) -> str:
+    name, _ = os.path.splitext(filename)
+
+    idx_us = name.find('_')
+    idx_sp = name.find(' ')
+
+    idxs = [i for i in [idx_us, idx_sp] if i != -1]
+
+    if not idxs:
+        return name
+
+    first_sep = min(idxs)
+
+    return name[:first_sep]
+
+
+def split_images_by_patient(images, train_ratio, val_ratio, test_ratio, seed=None):
+    assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6, "Ratios must sum to 1"
+
+    if seed is not None:
+        random.seed(seed)
+
+    patient_groups = {}
+
+    for img, fn in images:
+        pid = parse_patient_id(fn)
+        patient_groups.setdefault(pid, []).append((img, fn))
+
+    patients = list(patient_groups.keys())
+    random.shuffle(patients)
+
+    total_images = len(images)
+    target_train = int(train_ratio * total_images)
+    target_val = int(val_ratio * total_images)
+
+    target_test = total_images - target_train - target_val
+
+    splits = {"train": [], "val": [], "test": []}
+    counts = {"train": 0, "val": 0, "test": 0}
+    targets = {"train": target_train, "val": target_val, "test": target_test}
+
+    for pid in patients:
+        group = patient_groups[pid]
+        gsize = len(group)
+
+        caps = {k: targets[k] - counts[k] for k in ["train", "val", "test"]}
+        best_split = max(caps.keys(), key=lambda k: caps[k])
+        sorted_splits = sorted(caps.items(), key=lambda kv: kv[1], reverse=True)
+
+        for sp, cap in sorted_splits:
+            if cap >= gsize // 2:
+                best_split = sp
+                break
+
+        splits[best_split].extend(group)
+        counts[best_split] += gsize
+
+    return splits
+
+
 def apply_flip(image, intervals, width, decimal_places=3):
     flipped_image = image.transpose(Image.FLIP_LEFT_RIGHT)
-    flipped_annots = [[round(width - x1, decimal_places), round(width - x0, decimal_places), cls] for [x0, x1, cls] in
-                      intervals] if intervals else None
+    flipped_annots = [[round(width - x1, decimal_places), round(width - x0, decimal_places), cls]
+                      for [x0, x1, cls] in intervals] if intervals else None
 
     return flipped_image, flipped_annots, "_flip"
 
@@ -198,6 +266,7 @@ if __name__ == "__main__":
     parser.add_argument("--train_ratio", type=float, default=0.8)
     parser.add_argument("--val_ratio", type=float, default=0.1)
     parser.add_argument("--test_ratio", type=float, default=0.1)
+    parser.add_argument("--seed", type=int)
     args = parser.parse_args()
 
     # loading
@@ -210,8 +279,8 @@ if __name__ == "__main__":
     images, annotations = scale_images(images=images, org_size=args.org_size, new_size=args.new_size,
                                        annotations=annotations)
 
-    splits = split_images(images=images, train_ratio=args.train_ratio, val_ratio=args.val_ratio,
-                          test_ratio=args.test_ratio)
+    splits = split_images_by_patient(images=images, train_ratio=args.train_ratio, val_ratio=args.val_ratio,
+                                     test_ratio=args.test_ratio, seed=args.seed)
 
     # splits["train"], annotations = augment_images(images=splits["train"], new_size=args.new_size, annotations=annotations)
 

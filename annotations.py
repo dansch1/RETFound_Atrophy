@@ -42,18 +42,39 @@ def get_class_intervals(image, annotations, num_classes):
     intervals = []
 
     if len(bboxes) == 0:
-        return intervals
+        return []
 
     for bbox in bboxes:
         # get start and end point
-        x0, x1 = float(bbox.get("xtl")), float(bbox.get("xbr"))
-        cls = [attribute.get("name") for attribute in bbox.findall("attribute") if attribute.text == "true"]
-
-        if len(cls) != 1:
-            print(f"Found illegal annotations for image {image}")
+        try:
+            x0 = float(bbox.get("xtl"))
+            x1 = float(bbox.get("xbr"))
+        except (TypeError, ValueError):
+            print(f"Invalid coordinates in image {image}")
             continue
 
-        cls = CLASS_REDUCTION[num_classes][cls[0]]
+        attrs = bbox.findall("attribute")
+
+        if not attrs:
+            raw_cls = bbox.get("label")
+
+            if raw_cls == "no class":
+                return []
+
+        else:
+            true_attrs = [a.get("name") for a in attrs if (a.text or "").strip().lower() == "true"]
+
+            if len(true_attrs) != 1:
+                print(f"Found illegal attributes for image {image}")
+                continue
+
+            raw_cls = true_attrs[0]
+
+        if raw_cls not in CLASS_REDUCTION[num_classes].keys():
+            print(f"Could not parse class for image {image}")
+            continue
+
+        cls = CLASS_REDUCTION[num_classes][raw_cls]
         intervals.append([x0, x1, cls])
 
     return combine_intervals(intervals)
