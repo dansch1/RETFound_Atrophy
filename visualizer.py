@@ -126,7 +126,7 @@ def evaluate_IC(x, model, image, args, annotations=None):
 
 
 def draw_results(image_path, input_size, results, num_classes, output_dir, tag, segment_layers, line_width=4):
-    image = Image.open(image_path)
+    image = Image.open(image_path).convert("RGB")
     scale_factor = image.width / input_size
 
     # create output directory if necessary
