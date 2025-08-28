@@ -11,6 +11,7 @@ from scipy.interpolate import UnivariateSpline
 from torch import nn
 
 import models_vit
+from preprocess_data import setup_output_dir
 
 from util.datasets import build_transform
 
@@ -76,7 +77,7 @@ def evaluate_I(x, model, image, args, annotations=None):
 
     if args.draw:
         draw_results(image_path=image_path, input_size=args.input_size, results=prediction, num_classes=num_classes,
-                     output_dir=output_dir, tag="prediction", segment_layers=True)
+                     output_dir=output_dir, tag="prediction", segment_layers=args.segment_layers)
 
     if not annotations:
         return
@@ -111,7 +112,7 @@ def evaluate_IC(x, model, image, args, annotations=None):
 
     if args.draw:
         draw_results(image_path=image_path, input_size=args.input_size, results=prediction, num_classes=num_classes,
-                     output_dir=output_dir, tag="prediction", segment_layers=True)
+                     output_dir=output_dir, tag="prediction", segment_layers=args.segment_layers)
 
     if not annotations:
         return
@@ -282,6 +283,7 @@ if __name__ == '__main__':
     parser.add_argument("--resume", type=str)
     parser.add_argument("--annotations", type=str, default=None)
     parser.add_argument("--draw", action='store_true')
+    parser.add_argument("--segment_layers", action='store_true')
     parser.add_argument('--output_dir', default='./results',
                         help='path where to save results')
 
@@ -296,6 +298,9 @@ if __name__ == '__main__':
     if args.annotations:
         with open(args.annotations) as f:
             annotations = json.loads(f.read())
+
+    if args.draw:
+        setup_output_dir(args.output_dir)
 
     # get all images
     # supports single files or folders
