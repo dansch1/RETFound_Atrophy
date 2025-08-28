@@ -209,11 +209,14 @@ def augment_images(images, new_size, annotations, aug_config=None):
 
 
 def save_images(splits, new_path, annotations, format):
-    output_dir = os.path.join(new_path, "splits")
-    setup_output_dir(output_dir)
+    setup_output_dir(new_path)
+    image_dir = os.path.join(new_path, "images")
+
+    if not os.path.exists(image_dir):
+        os.makedirs(image_dir)
 
     for split_name, split_images in splits.items():
-        split_path = os.path.join(output_dir, split_name)
+        split_path = os.path.join(image_dir, split_name)
 
         if not os.path.exists(split_path):
             os.makedirs(split_path)
