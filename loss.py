@@ -37,9 +37,8 @@ class ICLoss(ILoss):
         target_classes = target[..., 2].reshape(-1).long()  # (16*10,) = (160,)
         class_loss = self.class_loss(input_classes, target_classes)
 
-        target_classes_flat = target_classes.reshape(-1)
-        mask = target_classes_flat > 0
         target_intervals = target[..., :2]
+        mask = (target[..., 2] > 0).unsqueeze(-1).expand(-1, -1, 2)
         interval_loss = super().forward(input_intervals[mask],
                                         target_intervals[mask]) if mask.any() else input_intervals.new_tensor(0.0)
 
