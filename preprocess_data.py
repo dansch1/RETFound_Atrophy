@@ -23,13 +23,15 @@ def load_images(org_path):
     return result
 
 
-def load_annotations(annotations_path, decimal_places=3):
+def load_annotations(annotations_path, images, decimal_places=3):
     with open(annotations_path) as f:
         annotations = json.loads(f.read())
 
+    image_filenames = {filename for _, filename in images}
+
     # round intervals
     return {filename: [[round(x0, decimal_places), round(x1, decimal_places), c] for [x0, x1, c] in intervals]
-            for filename, intervals in annotations.items()}
+            for filename, intervals in annotations.items() if filename in image_filenames}
 
 
 def crop_images(images, x_offset, y_offset, org_size):
@@ -271,7 +273,7 @@ if __name__ == "__main__":
 
     # loading
     org_images = load_images(args.org_path)
-    annotations = load_annotations(args.annotations)
+    annotations = load_annotations(annotations_path=args.annotations, images=org_images)
 
     # preprocessing
     images = crop_images(images=org_images, x_offset=args.x_offset, y_offset=args.y_offset, org_size=args.org_size)
