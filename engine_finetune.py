@@ -7,11 +7,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Iterable, Optional
 from timm.data import Mixup
-from timm.utils import accuracy
 from sklearn.metrics import (
     accuracy_score, roc_auc_score, f1_score, average_precision_score,
-    hamming_loss, jaccard_score, recall_score, precision_score, cohen_kappa_score, multilabel_confusion_matrix,
-    mean_absolute_error
+    hamming_loss, jaccard_score, recall_score, precision_score, cohen_kappa_score, mean_absolute_error
 )
 from pycm import ConfusionMatrix
 import util.misc as misc
@@ -201,7 +199,7 @@ def evaluate_IC(data_loader, model, device, args, epoch, mode, num_class, log_wr
 
     for batch in metric_logger.log_every(data_loader, 10, f'{mode}:'):
         images, target = batch[0].to(device, non_blocking=True), batch[-1].to(device, non_blocking=True)
-        interval_target, class_target = target[..., :2].to(torch.int64), target[..., 2].flatten().to(torch.int64)
+        interval_target, class_target = target[..., :2].float(), target[..., 2].flatten().long()
         target_onehot = F.one_hot(class_target, num_classes=num_class)
 
         with torch.cuda.amp.autocast():

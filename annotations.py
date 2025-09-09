@@ -77,30 +77,24 @@ def get_class_intervals(image, annotations, num_classes):
         cls = CLASS_REDUCTION[num_classes][raw_cls]
         intervals.append([x0, x1, cls])
 
-    return combine_intervals(intervals)
+    return merge_intervals(intervals)
 
 
-def combine_intervals(intervals):
-    if len(intervals) <= 1:
-        return intervals
+def merge_intervals(intervals, tol=10):
+    if not intervals:
+        return []
 
-    sorted_intervals = sorted(intervals, key=lambda l: l[0])  # strictly monotonically increasing
-    result = [sorted_intervals[0]]
+    intervals = sorted(intervals, key=lambda l: l[0])
+    merged = [intervals[0][:]]
 
-    for i in range(1, len(sorted_intervals)):
-        if result[-1][2] != sorted_intervals[i][2]:
-            result.append(sorted_intervals[i])
-            continue
-
-        if result[-1][1] >= sorted_intervals[i][1]:
-            continue
-
-        if abs(result[-1][1] - sorted_intervals[i][0]) < 10:
-            result[-1][1] = sorted_intervals[i][1]
+    for s, e, c in intervals[1:]:
+        last_s, last_e, last_c = merged[-1]
+        if c == last_c and s <= last_e + tol:
+            merged[-1][1] = max(last_e, e)
         else:
-            result.append(sorted_intervals[i])
+            merged.append([s, e, c])
 
-    return result
+    return merged
 
 
 def save_annotations(annotations, output_path, prefix):

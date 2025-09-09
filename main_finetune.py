@@ -25,8 +25,7 @@ from loss import ILoss, ICLoss
 from util.datasets import build_dataset, build_I_dataset, build_IC_dataset
 from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
-from huggingface_hub import hf_hub_download, login
-from engine_finetune import train_one_epoch, evaluate
+from huggingface_hub import hf_hub_download
 
 import warnings
 import faulthandler
@@ -336,7 +335,8 @@ def main(args, criterion):
     print("effective batch size: %d" % eff_batch_size)
 
     if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True,
+                                                          static_graph=False)
         model_without_ddp = model.module
 
     no_weight_decay = model_without_ddp.no_weight_decay() if hasattr(model_without_ddp, 'no_weight_decay') else []

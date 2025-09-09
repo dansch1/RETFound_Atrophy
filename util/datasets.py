@@ -23,21 +23,6 @@ def build_dataset(is_train, args):
     return dataset
 
 
-def build_I_dataset(is_train, args):
-    return _build_custom_dataset(is_train, args, IDataset)
-
-
-def build_IC_dataset(is_train, args):
-    return _build_custom_dataset(is_train, args, ICDataset)
-
-
-def _build_custom_dataset(is_train, args, dataset):
-    transform = build_transform(is_train, args)
-    root = os.path.join(args.data_path, is_train)
-
-    return dataset(is_train=is_train == 'train', args=args, root=root, transform=transform)
-
-
 def build_transform(is_train, args):
     mean = IMAGENET_DEFAULT_MEAN
     std = IMAGENET_DEFAULT_STD
@@ -72,6 +57,18 @@ def build_transform(is_train, args):
     t.append(transforms.ToTensor())
     t.append(transforms.Normalize(mean, std))
     return transforms.Compose(t)
+
+
+def build_IC_dataset(is_train, args):
+    transform = build_transform(is_train, args)
+    root = os.path.join(args.data_path, is_train)
+    return ICDataset(is_train=(is_train == 'train'), args=args, root=root, transform=transform)
+
+
+def build_I_dataset(is_train, args):
+    transform = build_transform(is_train, args)
+    root = os.path.join(args.data_path, is_train)
+    return IDataset(is_train=(is_train == 'train'), args=args, root=root, transform=transform)
 
 
 class ICDataset(Dataset):
@@ -117,7 +114,7 @@ class ICDataset(Dataset):
             image = self.transform(image)
 
         while len(targets) < self.max_intervals:
-            targets.append([0, 0, 0])
+            targets.append([0.0, 0.0, 0])
 
         targets = torch.tensor(targets, dtype=torch.float32)
 

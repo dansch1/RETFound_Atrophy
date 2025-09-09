@@ -47,6 +47,19 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
 
         return outcome
 
+    def forward_features_tokens(self, x):
+        """Return per-patch tokens (without CLS), shape [B, N, D]."""
+        B = x.shape[0]
+        x = self.patch_embed(x)  # [B, N, D]
+        cls_tokens = self.cls_token.expand(B, -1, -1)
+        x = torch.cat((cls_tokens, x), dim=1)  # [B, 1+N, D]
+        x = x + self.pos_embed
+        x = self.pos_drop(x)
+        for blk in self.blocks:
+            x = blk(x)
+        x = self.norm(x) if not self.global_pool else x  # falls du global_pool nutzt, lass es weg
+        return x[:, 1:, :]  # [B, N, D]
+
 
 class IDetector(VisionTransformer):
     def __init__(self, max_intervals, **kwargs):
@@ -69,26 +82,44 @@ class IDetector(VisionTransformer):
 
 
 class ICDetector(VisionTransformer):
-    def __init__(self, max_intervals, **kwargs):
+    def __init__(self, max_intervals, decoder_nhead=8, decoder_num_layers=1, **kwargs):
         super().__init__(**kwargs)
-
         self.img_size = kwargs['img_size']
         self.max_intervals = max_intervals
+        self.embed_dim = kwargs['embed_dim']
 
-        # (x0, x1) + num_classes for each interval
-        self.head = nn.Linear(self.embed_dim, (2 + self.num_classes) * self.max_intervals)
+        # Learnable queries, one per interval
+        self.query_embed = nn.Embedding(max_intervals, self.embed_dim)
+
+        # Small decoder for cross-attention from queries -> patch tokens
+        decoder_layer = nn.TransformerDecoderLayer(d_model=self.embed_dim, nhead=decoder_nhead, batch_first=True)
+        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=decoder_num_layers)
+
+        # Heads per query
+        self.head_interval = nn.Linear(self.embed_dim, 2)  # (x0, x1), sigmoid -> [0,1], scale -> img size
+        self.head_class = nn.Linear(self.embed_dim, self.num_classes)  # class logits (no softmax here)
 
     def forward(self, x):
-        x = self.forward_features(x)
+        # 1) Per-patch Tokens (keys/values for cross-attention)
+        tokens = self.forward_features_tokens(x)  # [B, N, D]
+        B, N, D = tokens.shape
 
-        preds = self.head(x).squeeze(1)  # shape: (batch_size, max_intervals * (2 + num_classes))
+        # 2) Queries as seeds for each slot
+        queries = self.query_embed.weight.unsqueeze(0).repeat(B, 1, 1)  # [B, Q, D]
 
-        interval_preds = preds[:, :self.max_intervals * 2].view(-1, self.max_intervals, 2)
-        interval_preds = torch.sigmoid(interval_preds) * self.img_size
+        # 3) Cross-attention: queries attend to tokens
+        out = self.decoder(tgt=queries, memory=tokens)  # [B, Q, D]
 
-        class_preds = preds[:, self.max_intervals * 2:].view(-1, self.max_intervals, self.num_classes)
+        # 4) Predict intervals and class logits per query
+        interval_raw = torch.sigmoid(self.head_interval(out)) * self.img_size  # [B, Q, 2] in pixels
+        # enforce x0 <= x1
+        x0 = torch.min(interval_raw[..., 0], interval_raw[..., 1]).unsqueeze(-1)
+        x1 = torch.max(interval_raw[..., 0], interval_raw[..., 1]).unsqueeze(-1)
+        interval_preds = torch.cat([x0, x1], dim=-1)  # [B, Q, 2]
 
-        return interval_preds, class_preds
+        class_logits = self.head_class(out)  # [B, Q, num_classes]
+
+        return interval_preds, class_logits
 
 
 def RETFound_mae(args, **kwargs):

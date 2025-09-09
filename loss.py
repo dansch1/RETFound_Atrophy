@@ -40,6 +40,6 @@ class ICLoss(ILoss):
         target_intervals = target[..., :2]
         mask = (target[..., 2] > 0).unsqueeze(-1).expand(-1, -1, 2)
         interval_loss = super().forward(input_intervals[mask],
-                                        target_intervals[mask]) if mask.any() else input_intervals.new_tensor(0.0)
+                                        target_intervals[mask]) if mask.any() else input_intervals.mean() * 0.0
 
         return self.interval_weight * interval_loss + class_loss
